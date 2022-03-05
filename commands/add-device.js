@@ -1,10 +1,12 @@
 // jkcoxson
 
 const { exec } = require('child_process');
-const { spawn } = require('child_process');
 const { MessageAttachment } = require('discord.js');
 const { Readable } = require('stream');
 const fs = require('fs');
+
+const util = require('node:util')
+const execPromise = util.promisify(exec);
 
 module.exports = class AddDeviceCommand {
     /**
@@ -48,7 +50,7 @@ module.exports = class AddDeviceCommand {
         this.postCommand();
 
         // Add a callback for the command
-        this.client.on('interactionCreate', (interaction) => {
+        this.client.on('interactionCreate', async (interaction) => {
             if (!interaction.isCommand()) return;
             if (interaction.command.name !== 'add-device') return;
 
@@ -73,58 +75,14 @@ module.exports = class AddDeviceCommand {
             }
             // Run 'wg' to generate the keys
             let privateKey = '';
-            let pkDone = false;
             let publicKey = '';
             let psKey = '';
-
-            let pkThread = spawn('wg', ['genkey']);
-            pkThread.stdout.on('data', (data) => {
-                privateKey += data;
-            });
-            // Wait for the thread to finish
-            pkThread.on('close', () => {
-                if (code !== 0) {
-                    interaction.reply('An error occurred while generating the keys.');
-                    return;
-                }
-                pkDone = true;
-            });
-            while (!pkDone) {
-                // Wait for the thread to finish
-            }
-
-            let pubThread = spawn('wg', ['pubkey', '<<<', privateKey]);
-            pubThread.stdout.on('data', (data) => {
-                publicKey += data;
-            });
-            // Wait for the thread to finish
-            pubThread.on('close', (code) => {
-                if (code !== 0) {
-                    interaction.reply('An error occurred while generating the keys.');
-                    return;
-                }
-                pkDone = true;
-            });
-            while (!pkDone) {
-                // Wait for the thread to finish
-            }
-
-            let psThread = spawn('wg', ['genpsk']);
-            psThread.stdout.on('data', (data) => {
-                psKey += data;
-            });
-            // Wait for the thread to finish
-            psThread.on('close', (code) => {
-                if (code !== 0) {
-                    interaction.reply('An error occurred while generating the keys.');
-                    return;
-                }
-                pkDone = true;
-            });
-            while (!pkDone) {
-                // Wait for the thread to finish
-            }
-
+            const { stdout, stderr } = await execPromise('wg genkey');
+            privateKey = stdout;
+            const { stdout2, stderr2 } = await execPromise('./pubkey.sh ' + privateKey);
+            publicKey = stdout2;
+            const { stdout3, stderr3 } = await execPromise('wg genpsk');
+            psKey = stdout3;
             device = {
                 name: deviceName,
                 udid: deviceUDID,
