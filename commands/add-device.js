@@ -3,6 +3,7 @@
 const { exec } = require('child_process');
 const { MessageAttachment } = require('discord.js');
 const { Readable } = require('stream');
+const fs = require('fs');
 
 module.exports = class AddDeviceCommand {
     /**
@@ -50,13 +51,21 @@ module.exports = class AddDeviceCommand {
             if (!interaction.isCommand()) return;
             if (interaction.command.name !== 'add-device') return;
 
+            let deviceName = interaction.options.get('name').value;
+            let deviceUDID = interaction.options.get('udid').value;
+            let devicePairingFile = interaction.options.get('pairing-file').attachment.attachment;
+
+
+            console.log('deviceName: ' + deviceName);
+            console.log('deviceUDID: ' + deviceUDID);
+
             // Get the user from the database
             let devices = this.client.database.get(interaction.member.user.id);
             if (devices === undefined) {
                 devices = [];
             }
             // Determine if a device by the same name or UDID already exists
-            let device = devices.find(device => device.name === interaction.command.options.name.value || device.udid === interaction.command.options.udid.value);
+            let device = devices.find(device => device.name === deviceName || device.udid === deviceUDID);
             if (device !== undefined) {
                 interaction.reply('A device with the name or UDID already exists.');
                 return;
@@ -99,8 +108,8 @@ module.exports = class AddDeviceCommand {
                 psKey = stdout;
             });
             device = {
-                name: interaction.command.options.getString('name'),
-                udid: interaction.command.options.getString('udid'),
+                name: deviceName,
+                udid: deviceUDID,
                 privateKey: privateKey,
                 publicKey: publicKey,
                 psKey: psKey
@@ -108,19 +117,11 @@ module.exports = class AddDeviceCommand {
             devices.push(device);
             this.client.database.set(interaction.member.user.id, devices);
 
-            // Move the pairing file to /var/lib/lockdownd
-            interaction.command.options.pairingFile.value.download((error, data) => {
-                if (error) {
-                    interaction.reply('An error occurred while downloading the pairing file.');
-                    return;
-                }
-                fs.writeFile('/var/lib/lockdownd/' + interaction.command.options.getString('udid') + '.plist', data, (error) => {
-                    if (error) {
-                        interaction.reply('An error occurred while writing the pairing file.');
-                        return;
-                    }
-                });
-            });
+            // Write the pairing file 
+            let pairingFile = new Readable();
+            pairingFile.push(devicePairingFile);
+            pairingFile.push(null);
+            pairingFile.pipe(fs.createWriteStream('/var/lib/lockdownd/' + deviceUDID + '.plist'));
 
             // Add peer to /etc/wireguard/wg0.conf
             fs.readFile('/etc/wireguard/wg0.conf', (error, data) => {
@@ -151,11 +152,11 @@ module.exports = class AddDeviceCommand {
                 }
 
                 let config = data.toString();
-                data += '\n# BEGIN_PEER ' + interaction.command.options.getString('udid');
+                data += '\n# BEGIN_PEER ' + deviceUDID;
                 data += '\n[Peer]\nPublicKey = ' + publicKey
                 data += '\nAllowedIPs = ' + ip + '/32';
                 data += '\nPresharedKey = ' + psKey;
-                data += '\n# END_PEER ' + interaction.command.options.getString('udid');
+                data += '\n# END_PEER ' + deviceUDID;
                 fs.writeFile('/etc/wireguard/wg0.conf', data, (error) => {
                     if (error) {
                         interaction.reply('An error occurred while writing the wireguard config file.');

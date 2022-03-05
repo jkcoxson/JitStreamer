@@ -12,7 +12,7 @@ module.exports = class Database {
     }
 
     save() {
-        fs.writeFileSync('./database.json', JSON.stringify(dbFile, null, 2));
+        fs.writeFileSync('./database.json', JSON.stringify(dbFile, null, 4));
     }
 
     set(key, value) {
