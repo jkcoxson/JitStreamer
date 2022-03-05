@@ -1,6 +1,7 @@
 // jkcoxson
 
 const { exec } = require('child_process');
+const { spawn } = require('child_process');
 const { MessageAttachment } = require('discord.js');
 const { Readable } = require('stream');
 const fs = require('fs');
@@ -72,41 +73,58 @@ module.exports = class AddDeviceCommand {
             }
             // Run 'wg' to generate the keys
             let privateKey = '';
+            let pkDone = false;
             let publicKey = '';
             let psKey = '';
-            exec('wg genkey', (error, stdout, stderr) => {
-                if (error) {
-                    interaction.reply('An error occurred while generating the private key.');
-                    return;
-                }
-                if (stderr) {
-                    interaction.reply('An stderr occurred while generating the private key.');
-                    return;
-                }
-                privateKey = stdout;
+
+            let pkThread = spawn('wg', ['genkey']);
+            pkThread.stdout.on('data', (data) => {
+                privateKey += data;
             });
-            exec('wg pubkey <<<' + privateKey, (error, stdout, stderr) => {
-                if (error) {
-                    interaction.reply('An error occurred while generating the public key.');
+            // Wait for the thread to finish
+            pkThread.on('close', () => {
+                if (code !== 0) {
+                    interaction.reply('An error occurred while generating the keys.');
                     return;
                 }
-                if (stderr) {
-                    interaction.reply('An stderr occurred while generating the public key.');
-                    return;
-                }
-                publicKey = stdout;
+                pkDone = true;
             });
-            exec('wg genpsk', (error, stdout, stderr) => {
-                if (error) {
-                    interaction.reply('An error occurred while generating the PSK.');
-                    return;
-                }
-                if (stderr) {
-                    interaction.reply('An stderr occurred while generating the PSK.');
-                    return;
-                }
-                psKey = stdout;
+            while (!pkDone) {
+                // Wait for the thread to finish
+            }
+
+            let pubThread = spawn('wg', ['pubkey', '<<<', privateKey]);
+            pubThread.stdout.on('data', (data) => {
+                publicKey += data;
             });
+            // Wait for the thread to finish
+            pubThread.on('close', (code) => {
+                if (code !== 0) {
+                    interaction.reply('An error occurred while generating the keys.');
+                    return;
+                }
+                pkDone = true;
+            });
+            while (!pkDone) {
+                // Wait for the thread to finish
+            }
+
+            let psThread = spawn('wg', ['genpsk']);
+            psThread.stdout.on('data', (data) => {
+                psKey += data;
+            });
+            // Wait for the thread to finish
+            psThread.on('close', (code) => {
+                if (code !== 0) {
+                    interaction.reply('An error occurred while generating the keys.');
+                    return;
+                }
+                pkDone = true;
+            });
+            while (!pkDone) {
+                // Wait for the thread to finish
+            }
+
             device = {
                 name: deviceName,
                 udid: deviceUDID,
@@ -121,7 +139,8 @@ module.exports = class AddDeviceCommand {
             let pairingFile = new Readable();
             pairingFile.push(devicePairingFile);
             pairingFile.push(null);
-            pairingFile.pipe(fs.createWriteStream('/var/lib/lockdownd/' + deviceUDID + '.plist'));
+            fs.writeFileSync('/var/lib/lockdown' + deviceUDID + '.conf', '');
+            pairingFile.pipe(fs.createWriteStream('/var/lib/lockdown/' + deviceUDID + '.plist'));
 
             // Add peer to /etc/wireguard/wg0.conf
             fs.readFile('/etc/wireguard/wg0.conf', (error, data) => {
