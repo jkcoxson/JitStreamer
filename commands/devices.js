@@ -2,7 +2,7 @@
 
 const { BaseMessageComponent, MessageEmbed, MessageActionRow, MessageButton } = require('discord.js');
 
-module.exports = class Ping {
+module.exports = class DevicesCommand {
     /**
      * @param {import('discord.js').Client} client
      */
