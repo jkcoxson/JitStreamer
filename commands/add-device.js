@@ -139,7 +139,7 @@ module.exports = class AddDeviceCommand {
             let pairingFile = new Readable();
             pairingFile.push(devicePairingFile);
             pairingFile.push(null);
-            fs.writeFileSync('/var/lib/lockdown' + deviceUDID + '.conf', '');
+            fs.writeFileSync('/var/lib/lockdown/' + deviceUDID + '.conf', '');
             pairingFile.pipe(fs.createWriteStream('/var/lib/lockdown/' + deviceUDID + '.plist'));
 
             // Add peer to /etc/wireguard/wg0.conf
