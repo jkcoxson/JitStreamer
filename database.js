@@ -1,5 +1,6 @@
 // jkcoxson
 
+const fs = require('fs');
 let dbFile = require('./database.json');
 
 module.exports = class Database {
@@ -10,12 +11,14 @@ module.exports = class Database {
         return dbFile[key];
     }
 
-    set(key, value) {
-        dbFile[key] = value;
-        self.save();
-    }
-
     save() {
         fs.writeFileSync('./database.json', JSON.stringify(dbFile, null, 2));
     }
+
+    set(key, value) {
+        dbFile[key] = value;
+        this.save();
+    }
+
+
 }
