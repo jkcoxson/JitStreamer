@@ -19,5 +19,8 @@
   "bugs": {
     "url": "https://github.com/jkcoxson/JitStreamer/issues"
   },
-  "homepage": "https://github.com/jkcoxson/JitStreamer#readme"
+  "homepage": "https://github.com/jkcoxson/JitStreamer#readme",
+  "dependencies": {
+    "discord.js": "^13.6.0"
+  }
 }
