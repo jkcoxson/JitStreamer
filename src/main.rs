@@ -4,7 +4,7 @@ use backend::Backend;
 use bytes::BufMut;
 use futures::TryStreamExt;
 use rusty_libimobiledevice::plist::Plist;
-use std::{str::FromStr, sync::Arc};
+use std::{net::SocketAddr, str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
 use warp::{
     filters::BoxedFilter,
@@ -24,6 +24,7 @@ async fn main() {
     let backend = Arc::new(Mutex::new(backend::Backend::load(
         current_dir.join(config.database_path),
     )));
+    let status_backend = backend.clone();
 
     // Listen for /api/upload
     let upload_route = warp::path("upload")
@@ -32,10 +33,10 @@ async fn main() {
         .and_then(move |form| upload_file(form, backend.clone()));
 
     // Listen for /status/
-    // let status_route = warp::path("status")
-    //     .and(warp::get())
-    //     .and(warp::filters::addr::remote())
-    //     .and_then(move |addr| status(x.clone()));
+    let status_route = warp::path("status")
+        .and(warp::get())
+        .and(warp::filters::addr::remote())
+        .and_then(move |addr| status(addr, status_backend.clone()));
 
     // Admin route
     let admin_route = warp::path("admin").map(|| {
@@ -47,6 +48,7 @@ async fn main() {
     let routes = root_redirect()
         .or(warp::fs::dir(current_dir.join("../JitStreamerSite/dist")))
         .or(upload_route)
+        .or(status_route)
         .or(admin_route);
 
     let addr: std::net::SocketAddr = format!("{}:{}", config.host, config.port)
@@ -105,5 +107,13 @@ async fn upload_file(
         }
     }
 
+    Ok("success")
+}
+
+async fn status(
+    addr: Option<SocketAddr>,
+    backend: Arc<Mutex<Backend>>,
+) -> Result<impl Reply, Rejection> {
+    let mut backend = backend.lock().await;
     Ok("success")
 }
