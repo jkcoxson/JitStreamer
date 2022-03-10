@@ -3,9 +3,13 @@
 use backend::Backend;
 use bytes::BufMut;
 use futures::TryStreamExt;
-use packets::*;
 use rusty_libimobiledevice::plist::Plist;
-use std::{net::SocketAddr, str::FromStr, sync::Arc};
+use std::{
+    net::SocketAddr,
+    str::FromStr,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::sync::Mutex;
 use warp::{
     filters::BoxedFilter,
@@ -23,20 +27,20 @@ mod packets;
 async fn main() {
     let config = config::Config::load();
     let current_dir = std::env::current_dir().expect("failed to read current directory");
-    let backend = Arc::new(Mutex::new(backend::Backend::load(
-        current_dir.join(config.database_path),
-    )));
+    let backend = Arc::new(Mutex::new(backend::Backend::load(&config)));
+    let upload_backend = backend.clone();
     let status_backend = backend.clone();
 
-    // Listen for /api/upload
+    // Upload route
     let upload_route = warp::path("upload")
         .and(warp::post())
         .and(warp::multipart::form().max_length(5_000_000))
-        .and_then(move |form| upload_file(form, backend.clone()));
+        .and(warp::filters::addr::remote())
+        .and_then(move |form, addr| upload_file(form, addr, upload_backend.clone()));
 
-    // Listen for /status/
+    // Status route
     let status_route = warp::path("status")
-        .and(warp::get())
+        .and(warp::post())
         .and(warp::filters::addr::remote())
         .and_then(move |addr| status(addr, status_backend.clone()));
 
@@ -79,8 +83,10 @@ fn root_redirect() -> BoxedFilter<(impl Reply,)> {
 
 async fn upload_file(
     form: FormData,
+    address: Option<SocketAddr>,
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
+    let mut backend = backend.lock().await;
     let parts: Vec<Part> = form.try_collect().await.map_err(|e| {
         eprintln!("form error: {}", e);
         warp::reject::reject()
@@ -101,15 +107,47 @@ async fn upload_file(
                 })?;
 
             // Get string from value
-            let value = String::from_utf8(value).unwrap();
+            let value = match String::from_utf8(value) {
+                Ok(value) => value,
+                Err(_) => {
+                    return Ok(packets::upload_response(false, "Unable to read file"));
+                }
+            };
             // Attempt to parse it as an Apple Plist
             let plist: Plist = Plist::from_xml(value).unwrap();
-            let udid = plist.dict_get_item("UDID").unwrap();
-            println!("{}", udid.get_string_val().unwrap());
+            let udid = match plist.clone().dict_get_item("UDID") {
+                Ok(s) => s.get_string_val().unwrap(),
+                _ => {
+                    return Ok(packets::upload_response(false, "Invalid pairing file!"));
+                }
+            };
+            let address = match address {
+                Some(address) => address,
+                None => {
+                    return Ok(packets::upload_response(false, "No address provided"));
+                }
+            };
+            // Save the plist to the plist storage directory
+            match backend.write_pairing_file(plist.to_string(), &udid) {
+                Ok(_) => {}
+                Err(_) => {
+                    return Ok(packets::upload_response(
+                        false,
+                        "Unable to save pairing file",
+                    ));
+                }
+            }
+
+            match backend.register_client(address.ip().to_string(), udid) {
+                Ok(_) => {}
+                Err(_) => {
+                    return Ok(packets::upload_response(false, "Client already registered"));
+                }
+            }
+            return Ok(packets::upload_response(true, ""));
         }
     }
-
-    Ok("success")
+    return Ok(packets::upload_response(false, "No file found"));
 }
 
 async fn status(
@@ -117,5 +155,22 @@ async fn status(
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
     let mut backend = backend.lock().await;
-    Ok("success")
+    if let None = addr {
+        return Ok(packets::status_packet(false, false));
+    }
+    if !addr.unwrap().to_string().starts_with(&backend.allowed_ip) {
+        return Ok(packets::status_packet(false, false));
+    }
+    match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
+        Some(client) => {
+            let start = SystemTime::now();
+            let since_the_epoch = start
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards");
+            client.last_seen = since_the_epoch.as_secs();
+        }
+        None => return Ok(packets::status_packet(true, false)),
+    };
+
+    Ok(packets::status_packet(true, true))
 }
