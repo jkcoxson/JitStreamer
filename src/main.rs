@@ -51,6 +51,12 @@ async fn main() {
         ))
     });
 
+    // Shortcuts route
+    let list_apps_route = warp::path("list_apps")
+        .and(warp::post())
+        .and(warp::filters::addr::remote())
+        .and_then(move |addr| list_apps(addr, backend.clone()));
+
     let routes = root_redirect()
         .or(warp::fs::dir(current_dir.join("../JitStreamerSite/dist")))
         .or(upload_route)
@@ -114,8 +120,8 @@ async fn upload_file(
                 }
             };
             // Attempt to parse it as an Apple Plist
-            let plist: Plist = Plist::from_xml(value).unwrap();
-            let udid = match plist.clone().dict_get_item("UDID") {
+            let plist: Plist = Plist::from_xml(value.clone()).unwrap();
+            let udid = match plist.dict_get_item("UDID") {
                 Ok(s) => s.get_string_val().unwrap(),
                 _ => {
                     return Ok(packets::upload_response(false, "Invalid pairing file!"));
@@ -127,6 +133,7 @@ async fn upload_file(
                     return Ok(packets::upload_response(false, "No address provided"));
                 }
             };
+            let plist: Plist = Plist::from_xml(value).unwrap();
             // Save the plist to the plist storage directory
             match backend.write_pairing_file(plist.to_string(), &udid) {
                 Ok(_) => {}
@@ -173,4 +180,18 @@ async fn status(
     };
 
     Ok(packets::status_packet(true, true))
+}
+
+async fn list_apps(
+    addr: Option<SocketAddr>,
+    backend: Arc<Mutex<Backend>>,
+) -> Result<impl Reply, Rejection> {
+    let mut backend = backend.lock().await;
+    if let None = addr {
+        return Err(warp::reject());
+    }
+    if !addr.unwrap().to_string().starts_with(&backend.allowed_ip) {
+        return Err(warp::reject());
+    }
+    Ok("success")
 }

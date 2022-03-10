@@ -1,10 +1,11 @@
 // jkcoxson
 
-use rusty_libimobiledevice::plist::Plist;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::config::Config;
+
+const SERVICE_NAME: &str = "12:34:56:78:90:AB@fe80::de52:85ff:fece:c422._apple-mobdev2._tcp";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Backend {
@@ -87,6 +88,40 @@ impl Backend {
         let path = format!("{}/{}.plist", &self.plist_storage, &udid);
         let mut file = std::fs::File::create(&path).unwrap();
         match std::io::Write::write_all(&mut file, plist.as_bytes()) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(()),
+        }
+    }
+
+    pub fn attach_device(udid: &String, ip: &String) -> Result<(), ()> {
+        // Create a TCP connection to localhost:32498
+        let mut client = match std::net::TcpStream::connect("127.0.0.1:32498") {
+            Ok(client) => client,
+            Err(_) => {
+                println!("Failed to connect to localhost:32498");
+                return Err(());
+            }
+        };
+        // Send the packet to the server
+        let packet = format!("1\n{}\n{}\n{}\n", udid, SERVICE_NAME, ip);
+        match std::io::Write::write_all(&mut client, packet.as_bytes()) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(()),
+        }
+    }
+
+    pub fn detach_device(udid: &String) -> Result<(), ()> {
+        // Create a TCP connection to localhost:32498
+        let mut client = match std::net::TcpStream::connect("127.0.0.1:32498") {
+            Ok(client) => client,
+            Err(_) => {
+                println!("Failed to connect to localhost:32498");
+                return Err(());
+            }
+        };
+        // Send the packet to the server
+        let packet = format!("0\n{}\n{}\n{}\n", udid, SERVICE_NAME, ".".to_string());
+        match std::io::Write::write_all(&mut client, packet.as_bytes()) {
             Ok(_) => Ok(()),
             Err(_) => Err(()),
         }

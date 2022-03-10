@@ -13,3 +13,12 @@ pub fn upload_response(success: bool, message: &str) -> String {
     packet["message"] = serde_json::Value::String(message.to_string());
     serde_json::to_string(&packet).unwrap()
 }
+
+pub fn list_apps_response(apps: Vec<String>) -> String {
+    // Apple Shortcuts requires that all lists are keys, real lists are not a thing.
+    let mut packet: serde_json::Value = serde_json::Value::Object(serde_json::Map::new());
+    for i in apps {
+        packet[&i] = serde_json::Value::String("".to_string());
+    }
+    serde_json::to_string(&packet).unwrap()
+}
