@@ -3,7 +3,8 @@
 use backend::Backend;
 use bytes::BufMut;
 use futures::TryStreamExt;
-use rusty_libimobiledevice::plist::Plist;
+use rusty_libimobiledevice::plist::{Plist, PlistDictIter};
+use rusty_libimobiledevice::{instproxy::InstProxyClient, libimobiledevice};
 use std::{
     net::SocketAddr,
     str::FromStr,
@@ -30,6 +31,8 @@ async fn main() {
     let backend = Arc::new(Mutex::new(backend::Backend::load(&config)));
     let upload_backend = backend.clone();
     let status_backend = backend.clone();
+    let list_apps_backend = backend.clone();
+    let shortcuts_launch_backend = backend.clone();
 
     // Upload route
     let upload_route = warp::path("upload")
@@ -52,15 +55,22 @@ async fn main() {
     });
 
     // Shortcuts route
-    let list_apps_route = warp::path("list_apps")
+    let list_apps_route = warp::path!("shortcuts" / "list_apps")
+        .and(warp::get())
+        .and(warp::filters::addr::remote())
+        .and_then(move |addr| list_apps(addr, list_apps_backend.clone()));
+
+    let shortcuts_launch_route = warp::path!("shortcuts" / "launch" / String)
         .and(warp::post())
         .and(warp::filters::addr::remote())
-        .and_then(move |addr| list_apps(addr, backend.clone()));
+        .and_then(move |query, addr| shortcuts_run(query, addr, shortcuts_launch_backend.clone()));
 
     let routes = root_redirect()
         .or(warp::fs::dir(current_dir.join("../JitStreamerSite/dist")))
         .or(upload_route)
         .or(status_route)
+        .or(list_apps_route)
+        .or(shortcuts_launch_route)
         .or(admin_route);
 
     let addr: std::net::SocketAddr = format!("{}:{}", config.host, config.port)
@@ -188,10 +198,210 @@ async fn list_apps(
 ) -> Result<impl Reply, Rejection> {
     let mut backend = backend.lock().await;
     if let None = addr {
+        println!("No address provided");
         return Err(warp::reject());
     }
     if !addr.unwrap().to_string().starts_with(&backend.allowed_ip) {
+        println!("Address not allowed");
         return Err(warp::reject());
     }
+    let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
+        Some(client) => client,
+        None => {
+            println!("No client found with the given IP");
+            return Err(warp::reject());
+        }
+    };
+    let device = match libimobiledevice::get_device(client.udid.clone()) {
+        Ok(device) => device,
+        Err(_) => {
+            println!("Unable to get device");
+            return Err(warp::reject());
+        }
+    };
+
+    let instproxy_client = match device.new_instproxy_client("jitstreamer".to_string()) {
+        Ok(instproxy) => instproxy,
+        Err(e) => {
+            println!("Error starting instproxy: {:?}", e);
+            return Err(warp::reject());
+        }
+    };
+    let mut client_opts = InstProxyClient::options_new();
+    InstProxyClient::options_add(
+        &mut client_opts,
+        vec![("ApplicationType".to_string(), Plist::new_string("Any"))],
+    );
+    InstProxyClient::options_set_return_attributes(
+        &mut client_opts,
+        vec![
+            "CFBundleIdentifier".to_string(),
+            "CFBundleExecutable".to_string(),
+            "Container".to_string(),
+        ],
+    );
+    let lookup_results = match instproxy_client.lookup(vec![], client_opts) {
+        Ok(apps) => apps,
+        Err(e) => {
+            println!("Error looking up apps: {:?}", e);
+            return Err(warp::reject());
+        }
+    };
+
+    let mut p_iter = PlistDictIter::from(lookup_results);
+    let mut apps = Vec::new();
+    loop {
+        let app = match p_iter.next_item() {
+            Some(app) => app,
+            None => break,
+        };
+        apps.push(app.0);
+    }
+
+    let mut to_ret = serde_json::Value::Object(serde_json::Map::new());
+    for i in apps {
+        if i.starts_with("com.apple.") || i.starts_with("com.google.") {
+            continue;
+        }
+        to_ret[i] = serde_json::Value::String(i.to_string());
+    }
+    Ok(to_ret.to_string())
+}
+
+async fn shortcuts_run(
+    app: String,
+    addr: Option<SocketAddr>,
+    backend: Arc<Mutex<Backend>>,
+) -> Result<impl Reply, Rejection> {
+    let mut backend = backend.lock().await;
+    if let None = addr {
+        println!("No address provided");
+        return Err(warp::reject());
+    }
+    if !addr.unwrap().to_string().starts_with(&backend.allowed_ip) {
+        println!("Address not allowed");
+        return Err(warp::reject());
+    }
+    let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
+        Some(client) => client,
+        None => {
+            println!("No client found with the given IP");
+            return Err(warp::reject());
+        }
+    };
+    let device = match libimobiledevice::get_device(client.udid.clone()) {
+        Ok(device) => device,
+        Err(_) => {
+            println!("Unable to get device");
+            return Err(warp::reject());
+        }
+    };
+
+    let instproxy_client = match device.new_instproxy_client("idevicedebug".to_string()) {
+        Ok(instproxy) => instproxy,
+        Err(e) => {
+            println!("Error starting instproxy: {:?}", e);
+            return Err(warp::reject());
+        }
+    };
+
+    let mut client_opts = InstProxyClient::options_new();
+    InstProxyClient::options_add(
+        &mut client_opts,
+        vec![("ApplicationType".to_string(), Plist::new_string("Any"))],
+    );
+    InstProxyClient::options_set_return_attributes(
+        &mut client_opts,
+        vec![
+            "CFBundleIdentifier".to_string(),
+            "CFBundleExecutable".to_string(),
+            "Container".to_string(),
+        ],
+    );
+    let lookup_results = match instproxy_client.lookup(vec![app.clone()], client_opts) {
+        Ok(apps) => apps,
+        Err(e) => {
+            println!("Error looking up apps: {:?}", e);
+            return Err(warp::reject());
+        }
+    };
+    let lookup_results = lookup_results.dict_get_item(&app).unwrap();
+
+    let working_directory = match lookup_results.dict_get_item("Container") {
+        Ok(p) => p,
+        Err(_) => {
+            println!("App not found");
+            return Err(warp::reject());
+        }
+    };
+
+    let working_directory = match working_directory.get_string_val() {
+        Ok(p) => p,
+        Err(_) => {
+            println!("App not found");
+            return Err(warp::reject());
+        }
+    };
+    println!("Working directory: {}", working_directory);
+
+    let bundle_path = match instproxy_client.get_path_for_bundle_identifier(app) {
+        Ok(p) => p,
+        Err(e) => {
+            println!("Error getting path for bundle identifier: {:?}", e);
+            return Err(warp::reject());
+        }
+    };
+
+    println!("Bundle Path: {}", bundle_path);
+
+    let debug_server = match device.new_debug_server("idevicedebug") {
+        Ok(d) => d,
+        Err(e) => {
+            println!("Error starting debug server: {:?}", e);
+            println!("Maybe mount the Developer DMG?");
+            return Err(warp::reject());
+        }
+    };
+
+    match debug_server.send_command("QSetMaxPacketSize: 1024".into()) {
+        Ok(res) => println!("Successfully set max packet size: {:?}", res),
+        Err(e) => {
+            println!("Error setting max packet size: {:?}", e);
+            return Err(warp::reject());
+        }
+    }
+
+    match debug_server.send_command(format!("QSetWorkingDir: {}", working_directory).into()) {
+        Ok(res) => println!("Successfully set working directory: {:?}", res),
+        Err(e) => {
+            println!("Error setting working directory: {:?}", e);
+            return Err(warp::reject());
+        }
+    }
+
+    match debug_server.set_argv(vec![bundle_path.clone(), bundle_path.clone()]) {
+        Ok(res) => println!("Successfully set argv: {:?}", res),
+        Err(e) => {
+            println!("Error setting argv: {:?}", e);
+            return Err(warp::reject());
+        }
+    }
+
+    match debug_server.send_command("qLaunchSuccess".into()) {
+        Ok(res) => println!("Got launch response: {:?}", res),
+        Err(e) => {
+            println!("Error checking if app launched: {:?}", e);
+            return Err(warp::reject());
+        }
+    }
+
+    match debug_server.send_command("D".into()) {
+        Ok(res) => println!("Detaching: {:?}", res),
+        Err(e) => {
+            println!("Error detaching: {:?}", e);
+            return Err(warp::reject());
+        }
+    }
+
     Ok("success")
 }
