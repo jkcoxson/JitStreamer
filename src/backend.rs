@@ -133,7 +133,7 @@ impl Backend {
         };
         // Download DMG zip
         println!("Downloading iOS {} DMG...", version.clone());
-        let mut resp = match reqwest::blocking::get(ios_dmg_url) {
+        let resp = match reqwest::get(ios_dmg_url).await {
             Ok(resp) => resp,
             Err(_) => {
                 return Err("Error downloading DMG".to_string());
@@ -145,7 +145,13 @@ impl Backend {
                 return Err("Error creating temp DMG.zip".to_string());
             }
         };
-        match std::io::copy(&mut resp, &mut out) {
+        let mut content = std::io::Cursor::new(match resp.bytes().await {
+            Ok(content) => content,
+            Err(_) => {
+                return Err("Error reading DMG".to_string());
+            }
+        });
+        match std::io::copy(&mut content, &mut out) {
             Ok(_) => (),
             Err(_) => {
                 return Err("Error downloading DMG".to_string());
