@@ -356,11 +356,68 @@ async fn shortcuts_run(
         }
     };
 
+    let lockdown_client = match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
+        Ok(lckd) => {
+            println!("Successfully connected to lockdownd");
+            lckd
+        }
+        Err(e) => {
+            println!("Error starting lockdown service: {:?}", e);
+            return Err(warp::reject());
+        }
+    };
+
+    let ios_version = match lockdown_client.get_value("ProductVersion".to_string(), "".to_string())
+    {
+        Ok(ios_version) => ios_version.get_string_val().unwrap(),
+        Err(e) => {
+            println!("Error getting iOS version: {:?}", e);
+            return Err(warp::reject());
+        }
+    };
+    println!("iOS Version: {}", ios_version);
+
+    let dmg_path = match backend.get_ios_dmg(&ios_version).await {
+        Ok(dmg_path) => dmg_path,
+        Err(_) => {
+            println!("Error: no dmg found for this version");
+            return Err(warp::reject());
+        }
+    };
+
+    // This is in an std thread because we do not want results back from this. It will block all new connections.
+    std::thread::spawn(move || {
+        shortcuts_launch_thread(udid, app, dmg_path);
+    });
+
+    Ok("success")
+}
+
+fn shortcuts_launch_thread(udid: String, app: String, dmg_path: String) {
+    let device = match libimobiledevice::get_device(udid) {
+        Ok(device) => device,
+        Err(_) => {
+            println!("Unable to get device");
+            return;
+        }
+    };
+
+    let mut lockdown_client = match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
+        Ok(lckd) => {
+            println!("Successfully connected to lockdownd");
+            lckd
+        }
+        Err(e) => {
+            println!("Error starting lockdown service: {:?}", e);
+            return;
+        }
+    };
+
     let instproxy_client = match device.new_instproxy_client("idevicedebug".to_string()) {
         Ok(instproxy) => instproxy,
         Err(e) => {
             println!("Error starting instproxy: {:?}", e);
-            return Err(warp::reject());
+            return;
         }
     };
 
@@ -381,7 +438,7 @@ async fn shortcuts_run(
         Ok(apps) => apps,
         Err(e) => {
             println!("Error looking up apps: {:?}", e);
-            return Err(warp::reject());
+            return;
         }
     };
     let lookup_results = lookup_results.dict_get_item(&app).unwrap();
@@ -390,7 +447,7 @@ async fn shortcuts_run(
         Ok(p) => p,
         Err(_) => {
             println!("App not found");
-            return Err(warp::reject());
+            return;
         }
     };
 
@@ -398,7 +455,7 @@ async fn shortcuts_run(
         Ok(p) => p,
         Err(_) => {
             println!("App not found");
-            return Err(warp::reject());
+            return;
         }
     };
     println!("Working directory: {}", working_directory);
@@ -407,7 +464,7 @@ async fn shortcuts_run(
         Ok(p) => p,
         Err(e) => {
             println!("Error getting path for bundle identifier: {:?}", e);
-            return Err(warp::reject());
+            return;
         }
     };
 
@@ -417,39 +474,6 @@ async fn shortcuts_run(
         Ok(d) => d,
         Err(_) => {
             println!("Mounting the DMG");
-
-            let mut lockdown_client =
-                match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
-                    Ok(lckd) => {
-                        println!("Successfully connected to lockdownd");
-                        lckd
-                    }
-                    Err(e) => {
-                        println!("Error starting lockdown service: {:?}", e);
-                        return Err(warp::reject());
-                    }
-                };
-
-            let ios_version =
-                match lockdown_client.get_value("ProductVersion".to_string(), "".to_string()) {
-                    Ok(ios_version) => ios_version.get_string_val().unwrap(),
-                    Err(e) => {
-                        println!("Error getting iOS version: {:?}", e);
-                        return Err(warp::reject());
-                    }
-                };
-            println!("iOS Version: {}", ios_version);
-
-            let ios_major_version = ios_version
-                .split('.')
-                .next()
-                .unwrap()
-                .parse::<u32>()
-                .unwrap();
-            if ios_major_version < 8 {
-                println!("Error: old versions of iOS are not supported atm because lazy");
-                return Err(warp::reject());
-            }
 
             let service = match lockdown_client
                 .start_service("com.apple.mobile.mobile_image_mounter".to_string())
@@ -463,7 +487,7 @@ async fn shortcuts_run(
                         "Error starting com.apple.mobile.mobile_image_mounter: {:?}",
                         e
                     );
-                    return Err(warp::reject());
+                    return;
                 }
             };
 
@@ -474,15 +498,7 @@ async fn shortcuts_run(
                 }
                 Err(e) => {
                     println!("Error starting mobile_image_mounter: {:?}", e);
-                    return Err(warp::reject());
-                }
-            };
-
-            let dmg_path = match backend.get_ios_dmg(&ios_version).await {
-                Ok(dmg_path) => dmg_path,
-                Err(_) => {
-                    println!("Error: no dmg found for this version");
-                    return Err(warp::reject());
+                    return;
                 }
             };
 
@@ -496,7 +512,7 @@ async fn shortcuts_run(
                 }
                 Err(e) => {
                     println!("Error uploading image: {:?}", e);
-                    return Err(warp::reject());
+                    return;
                 }
             }
             match mim.mount_image(
@@ -509,14 +525,14 @@ async fn shortcuts_run(
                 }
                 Err(e) => {
                     println!("Error mounting image: {:?}", e);
-                    return Err(warp::reject());
+                    return;
                 }
             }
             let debug_server = match device.new_debug_server("jitstreamer") {
                 Ok(d) => d,
                 Err(e) => {
                     println!("Error starting debug server: {:?}", e);
-                    return Err(warp::reject());
+                    return;
                 }
             };
             debug_server
@@ -527,7 +543,7 @@ async fn shortcuts_run(
         Ok(res) => println!("Successfully set max packet size: {:?}", res),
         Err(e) => {
             println!("Error setting max packet size: {:?}", e);
-            return Err(warp::reject());
+            return;
         }
     }
 
@@ -535,7 +551,7 @@ async fn shortcuts_run(
         Ok(res) => println!("Successfully set working directory: {:?}", res),
         Err(e) => {
             println!("Error setting working directory: {:?}", e);
-            return Err(warp::reject());
+            return;
         }
     }
 
@@ -543,7 +559,7 @@ async fn shortcuts_run(
         Ok(res) => println!("Successfully set argv: {:?}", res),
         Err(e) => {
             println!("Error setting argv: {:?}", e);
-            return Err(warp::reject());
+            return;
         }
     }
 
@@ -551,7 +567,7 @@ async fn shortcuts_run(
         Ok(res) => println!("Got launch response: {:?}", res),
         Err(e) => {
             println!("Error checking if app launched: {:?}", e);
-            return Err(warp::reject());
+            return;
         }
     }
 
@@ -559,13 +575,7 @@ async fn shortcuts_run(
         Ok(res) => println!("Detaching: {:?}", res),
         Err(e) => {
             println!("Error detaching: {:?}", e);
-            return Err(warp::reject());
+            return;
         }
     }
-    // Deregister device when not in use
-    match device_connection::unregister_device(&udid).await {
-        _ => {}
-    }
-
-    Ok("success")
 }
