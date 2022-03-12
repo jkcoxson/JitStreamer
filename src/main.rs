@@ -23,13 +23,18 @@ use warp::{
 mod backend;
 mod config;
 mod device_connection;
-mod dmg;
 mod packets;
 
 #[tokio::main]
 async fn main() {
     let config = config::Config::load();
     let current_dir = std::env::current_dir().expect("failed to read current directory");
+    match device_connection::unregister_all_devices().await {
+        Ok(_) => {}
+        Err(e) => {
+            println!("Failed to unregister devices: {}", e);
+        }
+    }
     let backend = Arc::new(Mutex::new(backend::Backend::load(&config)));
     let upload_backend = backend.clone();
     let status_backend = backend.clone();
@@ -305,6 +310,10 @@ async fn list_apps(
         }
         to_ret[i] = serde_json::Value::String(i.to_string());
     }
+    // Deregister device when not in use
+    match device_connection::unregister_device(&client.udid).await {
+        _ => {}
+    }
     Ok(to_ret.to_string())
 }
 
@@ -329,6 +338,7 @@ async fn shortcuts_run(
             return Err(warp::reject());
         }
     };
+    let udid = client.udid.clone();
 
     match device_connection::connect_device(&client.udid, client.ip.as_str()).await {
         true => {}
@@ -550,6 +560,10 @@ async fn shortcuts_run(
             println!("Error detaching: {:?}", e);
             return Err(warp::reject());
         }
+    }
+    // Deregister device when not in use
+    match device_connection::unregister_device(&udid).await {
+        _ => {}
     }
 
     Ok("success")
