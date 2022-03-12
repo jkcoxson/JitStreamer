@@ -22,6 +22,8 @@ use warp::{
 
 mod backend;
 mod config;
+mod device_connection;
+mod dmg;
 mod packets;
 
 #[tokio::main]
@@ -154,11 +156,40 @@ async fn upload_file(
                     ));
                 }
             }
+            // Make sure that the client is valid before adding it to the backend
+            match device_connection::connect_device(&udid, &address.ip().to_string()).await {
+                true => {}
+                false => {
+                    // Remove the pairing file
+                    match backend.remove_pairing_file(&udid) {
+                        Ok(_) => {}
+                        Err(_) => {
+                            return Ok(packets::upload_response(
+                                false,
+                                "Unable to remove pairing file",
+                            ));
+                        }
+                    };
+                    return Ok(packets::upload_response(
+                        false,
+                        "Unable to connect to device",
+                    ));
+                }
+            }
 
-            match backend.register_client(address.ip().to_string(), udid) {
+            match backend.register_client(address.ip().to_string(), udid.clone()) {
                 Ok(_) => {}
                 Err(_) => {
                     return Ok(packets::upload_response(false, "Client already registered"));
+                }
+            }
+            match device_connection::unregister_device(&udid).await {
+                Ok(_) => {}
+                Err(_) => {
+                    return Ok(packets::upload_response(
+                        false,
+                        "Unable to unregister device",
+                    ));
                 }
             }
             return Ok(packets::upload_response(true, ""));
@@ -212,6 +243,15 @@ async fn list_apps(
             return Err(warp::reject());
         }
     };
+
+    match device_connection::connect_device(&client.udid, client.ip.as_str()).await {
+        true => {}
+        false => {
+            println!("Unable to connect to device");
+            return Err(warp::reject());
+        }
+    };
+
     let device = match libimobiledevice::get_device(client.udid.clone()) {
         Ok(device) => device,
         Err(_) => {
@@ -289,6 +329,15 @@ async fn shortcuts_run(
             return Err(warp::reject());
         }
     };
+
+    match device_connection::connect_device(&client.udid, client.ip.as_str()).await {
+        true => {}
+        false => {
+            println!("Unable to connect to device");
+            return Err(warp::reject());
+        }
+    };
+
     let device = match libimobiledevice::get_device(client.udid.clone()) {
         Ok(device) => device,
         Err(_) => {
@@ -354,12 +403,112 @@ async fn shortcuts_run(
 
     println!("Bundle Path: {}", bundle_path);
 
-    let debug_server = match device.new_debug_server("idevicedebug") {
+    let debug_server = match device.new_debug_server("jitstreamer") {
         Ok(d) => d,
-        Err(e) => {
-            println!("Error starting debug server: {:?}", e);
-            println!("Maybe mount the Developer DMG?");
-            return Err(warp::reject());
+        Err(_) => {
+            println!("Mounting the DMG");
+
+            let mut lockdown_client =
+                match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
+                    Ok(lckd) => {
+                        println!("Successfully connected to lockdownd");
+                        lckd
+                    }
+                    Err(e) => {
+                        println!("Error starting lockdown service: {:?}", e);
+                        return Err(warp::reject());
+                    }
+                };
+
+            let ios_version =
+                match lockdown_client.get_value("ProductVersion".to_string(), "".to_string()) {
+                    Ok(ios_version) => ios_version.get_string_val().unwrap(),
+                    Err(e) => {
+                        println!("Error getting iOS version: {:?}", e);
+                        return Err(warp::reject());
+                    }
+                };
+
+            let ios_major_version = ios_version
+                .split('.')
+                .next()
+                .unwrap()
+                .parse::<u32>()
+                .unwrap();
+            if ios_major_version < 8 {
+                println!("Error: old versions of iOS are not supported atm because lazy");
+                return Err(warp::reject());
+            }
+
+            let service = match lockdown_client
+                .start_service("com.apple.mobile.mobile_image_mounter".to_string())
+            {
+                Ok(service) => {
+                    println!("Successfully started com.apple.mobile.mobile_image_mounter");
+                    service
+                }
+                Err(e) => {
+                    println!(
+                        "Error starting com.apple.mobile.mobile_image_mounter: {:?}",
+                        e
+                    );
+                    return Err(warp::reject());
+                }
+            };
+
+            let mim = match device.new_mobile_image_mounter(&service) {
+                Ok(mim) => {
+                    println!("Successfully started mobile_image_mounter");
+                    mim
+                }
+                Err(e) => {
+                    println!("Error starting mobile_image_mounter: {:?}", e);
+                    return Err(warp::reject());
+                }
+            };
+
+            let dmg_path = match backend.get_ios_dmg(&ios_version).await {
+                Ok(dmg_path) => dmg_path,
+                Err(_) => {
+                    println!("Error: no dmg found for this version");
+                    return Err(warp::reject());
+                }
+            };
+
+            match mim.upload_image(
+                dmg_path.clone(),
+                "Developer".to_string(),
+                format!("{}.signature", dmg_path.clone()).to_string(),
+            ) {
+                Ok(_) => {
+                    println!("Successfully uploaded image");
+                }
+                Err(e) => {
+                    println!("Error uploading image: {:?}", e);
+                    return Err(warp::reject());
+                }
+            }
+            match mim.mount_image(
+                dmg_path.clone(),
+                "Developer".to_string(),
+                format!("{}.signature", dmg_path.clone()).to_string(),
+            ) {
+                Ok(_) => {
+                    println!("Successfully mounted image");
+                }
+                Err(e) => {
+                    println!("Error mounting image: {:?}", e);
+                    return Err(warp::reject());
+                }
+            }
+            let debug_server = match device.new_debug_server("jitstreamer") {
+                Ok(d) => d,
+                Err(e) => {
+                    println!("Error starting debug server: {:?}", e);
+                    return Err(warp::reject());
+                }
+            };
+            debug_server
         }
     };
 

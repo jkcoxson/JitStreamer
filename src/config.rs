@@ -11,6 +11,7 @@ pub struct Config {
     pub static_path: String,
     pub database_path: String,
     pub plist_storage: String,
+    pub dmg_path: String,
     pub allowed_ip: String,
 }
 
@@ -36,6 +37,7 @@ impl Config {
             static_path: "./dist".to_string(),
             database_path: "./database.json".to_string(),
             plist_storage: "/var/lib/lockdown/".to_string(),
+            dmg_path: "/DeveloperDiskImages/".to_string(),
             allowed_ip: "127.0".to_string(),
         }
     }

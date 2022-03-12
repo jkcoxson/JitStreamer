@@ -5,14 +5,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::config::Config;
 
-const SERVICE_NAME: &str = "12:34:56:78:90:AB@fe80::de52:85ff:fece:c422._apple-mobdev2._tcp";
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Backend {
     clients: Vec<Client>, // This is a Vec because we will need to iterate over it regardless of hashing method.
     pub allowed_ip: String,
     database_path: String,
     plist_storage: String,
+    dmg_path: String,
 }
 
 impl Backend {
@@ -27,6 +26,7 @@ impl Backend {
                     allowed_ip: config.allowed_ip.clone(),
                     database_path: config.database_path.clone(),
                     plist_storage: config.plist_storage.clone(),
+                    dmg_path: config.dmg_path.clone(),
                 };
             }
         };
@@ -38,6 +38,7 @@ impl Backend {
             allowed_ip: config.allowed_ip.clone(),
             database_path: config.database_path.clone(),
             plist_storage: config.plist_storage.clone(),
+            dmg_path: config.dmg_path.clone(),
         }
     }
 
@@ -93,38 +94,103 @@ impl Backend {
         }
     }
 
-    pub fn attach_device(udid: &String, ip: &String) -> Result<(), ()> {
-        // Create a TCP connection to localhost:32498
-        let mut client = match std::net::TcpStream::connect("127.0.0.1:32498") {
-            Ok(client) => client,
-            Err(_) => {
-                println!("Failed to connect to localhost:32498");
-                return Err(());
-            }
-        };
-        // Send the packet to the server
-        let packet = format!("1\n{}\n{}\n{}\n", udid, SERVICE_NAME, ip);
-        match std::io::Write::write_all(&mut client, packet.as_bytes()) {
+    pub fn remove_pairing_file(&self, udid: &String) -> Result<(), ()> {
+        let path = format!("{}/{}.plist", &self.plist_storage, &udid);
+        match std::fs::remove_file(&path) {
             Ok(_) => Ok(()),
             Err(_) => Err(()),
         }
     }
 
-    pub fn detach_device(udid: &String) -> Result<(), ()> {
-        // Create a TCP connection to localhost:32498
-        let mut client = match std::net::TcpStream::connect("127.0.0.1:32498") {
-            Ok(client) => client,
+    pub async fn get_ios_dmg(&self, version: &str) -> Result<String, String> {
+        // Check if directory exists
+        let path = format!("{}/{}.dmg", &self.dmg_path, version);
+        if std::path::Path::new(&path).exists() {
+            return Ok(path);
+        }
+        // Download versions.json from GitHub
+        println!("Downloading iOS dictionary...");
+        let url = "https://raw.githubusercontent.com/jkcoxson/jit_shipper/master/versions.json";
+        let response = match reqwest::get(url).await {
+            Ok(response) => response,
             Err(_) => {
-                println!("Failed to connect to localhost:32498");
-                return Err(());
+                return Err("Error downloading versions.json".to_string());
             }
         };
-        // Send the packet to the server
-        let packet = format!("0\n{}\n{}\n{}\n", udid, SERVICE_NAME, ".".to_string());
-        match std::io::Write::write_all(&mut client, packet.as_bytes()) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(()),
+        let contents = match response.text().await {
+            Ok(contents) => contents,
+            Err(_) => {
+                return Err("Error reading versions.json".to_string());
+            }
+        };
+        // Parse versions.json
+        let versions: serde_json::Value = serde_json::from_str(&contents).unwrap();
+        // Get DMG url
+        let ios_dmg_url = match versions.get(version.clone()) {
+            Some(x) => x.as_str().unwrap().to_string(),
+            None => return Err("DMG library does not contain your iOS version".to_string()),
+        };
+        // Download DMG zip
+        println!("Downloading iOS {} DMG...", version.clone());
+        let mut resp = match reqwest::blocking::get(ios_dmg_url) {
+            Ok(resp) => resp,
+            Err(_) => {
+                return Err("Error downloading DMG".to_string());
+            }
+        };
+        let mut out = match std::fs::File::create("dmg.zip") {
+            Ok(out) => out,
+            Err(_) => {
+                return Err("Error creating temp DMG.zip".to_string());
+            }
+        };
+        match std::io::copy(&mut resp, &mut out) {
+            Ok(_) => (),
+            Err(_) => {
+                return Err("Error downloading DMG".to_string());
+            }
+        };
+        // Create tmp path
+        let tmp_path = format!("{}/tmp", &self.dmg_path);
+        std::fs::create_dir_all(&tmp_path).unwrap();
+        // Unzip zip
+        let mut dmg_zip = zip::ZipArchive::new(std::fs::File::open("dmg.zip").unwrap()).unwrap();
+        match dmg_zip.extract(&tmp_path) {
+            Ok(_) => {}
+            Err(e) => return Err(format!("Failed to unzip DMG: {:?}", e)),
         }
+        // Remove zip
+        match std::fs::remove_file("dmg.zip") {
+            Ok(_) => (),
+            Err(_) => return Err("Failed to remove DMG.zip".to_string()),
+        }
+        // Get folder name in tmp
+        let mut dmg_path = std::path::PathBuf::new();
+        for entry in std::fs::read_dir(&tmp_path).unwrap() {
+            let entry = entry.unwrap();
+            if entry.path().is_dir() {
+                dmg_path = entry.path();
+            }
+        }
+        // Move DMG to JIT Shipper directory
+        let ios_dmg = dmg_path.join("DeveloperDiskImage.dmg");
+        std::fs::rename(ios_dmg, format!("{}/{}.dmg", &self.dmg_path, version)).unwrap();
+        let ios_sig = dmg_path.join("DeveloperDiskImage.dmg.signature");
+        std::fs::rename(
+            ios_sig,
+            format!("{}/{}.dmg.signature", &self.dmg_path, version),
+        )
+        .unwrap();
+
+        // Remove tmp path
+        std::fs::remove_dir_all(tmp_path).unwrap();
+        println!(
+            "Successfully downloaded and extracted iOS {} developer disk image",
+            version
+        );
+
+        // Return DMG path
+        Ok(format!("{}/{}.dmg", &self.dmg_path, version))
     }
 }
 
