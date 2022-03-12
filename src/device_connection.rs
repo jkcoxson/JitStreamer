@@ -52,14 +52,19 @@ pub async fn connect_device(udid: &str, ip: &str) -> bool {
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     // Register the device
     register_device(udid, ip).await.ok();
-    // Wait for 1 seconds to give the device time to register
-    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-    // Determine if the device is connected
-    let udids = match rusty_libimobiledevice::libimobiledevice::get_udid_list() {
-        Ok(udids) => udids,
-        Err(_) => {
-            return false;
+    for _ in 0..20 {
+        // Wait for 1 seconds to give the device time to register
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+        // Determine if the device is connected
+        let udids = match rusty_libimobiledevice::libimobiledevice::get_udid_list() {
+            Ok(udids) => udids,
+            Err(_) => {
+                return false;
+            }
+        };
+        if udids.contains(&udid.to_string()) {
+            return true;
         }
-    };
-    udids.contains(&udid.to_string())
+    }
+    false
 }
