@@ -103,6 +103,7 @@ impl Backend {
     }
 
     pub async fn get_ios_dmg(&self, version: &str) -> Result<String, String> {
+        println!("Finding iOS {}", version);
         // Check if directory exists
         let path = format!("{}/{}.dmg", &self.dmg_path, version);
         if std::path::Path::new(&path).exists() {

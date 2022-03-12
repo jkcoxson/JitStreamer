@@ -438,6 +438,7 @@ async fn shortcuts_run(
                         return Err(warp::reject());
                     }
                 };
+            println!("iOS Version: {}", ios_version);
 
             let ios_major_version = ios_version
                 .split('.')
