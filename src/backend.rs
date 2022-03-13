@@ -11,7 +11,7 @@ pub struct Backend {
     pub allowed_ip: String,
     database_path: String,
     plist_storage: String,
-    dmg_path: String,
+    pub dmg_path: String,
 }
 
 impl Backend {
@@ -102,10 +102,10 @@ impl Backend {
         }
     }
 
-    pub async fn get_ios_dmg(&self, version: &str) -> Result<String, String> {
+    pub async fn get_ios_dmg(base_path: &str, version: &str) -> Result<String, String> {
         println!("Finding iOS {}", version);
         // Check if directory exists
-        let path = format!("{}/{}.dmg", &self.dmg_path, version);
+        let path = format!("{}/{}.dmg", &base_path, version);
         if std::path::Path::new(&path).exists() {
             return Ok(path);
         }
@@ -158,7 +158,7 @@ impl Backend {
             }
         };
         // Create tmp path
-        let tmp_path = format!("{}/tmp", &self.dmg_path);
+        let tmp_path = format!("{}/tmp", &base_path);
         std::fs::create_dir_all(&tmp_path).unwrap();
         // Unzip zip
         let mut dmg_zip = match zip::ZipArchive::new(std::fs::File::open("dmg.zip").unwrap()) {
@@ -186,11 +186,11 @@ impl Backend {
         }
         // Move DMG to JIT Shipper directory
         let ios_dmg = dmg_path.join("DeveloperDiskImage.dmg");
-        std::fs::rename(ios_dmg, format!("{}/{}.dmg", &self.dmg_path, version)).unwrap();
+        std::fs::rename(ios_dmg, format!("{}/{}.dmg", &base_path, version)).unwrap();
         let ios_sig = dmg_path.join("DeveloperDiskImage.dmg.signature");
         std::fs::rename(
             ios_sig,
-            format!("{}/{}.dmg.signature", &self.dmg_path, version),
+            format!("{}/{}.dmg.signature", &base_path, version),
         )
         .unwrap();
 
@@ -202,7 +202,7 @@ impl Backend {
         );
 
         // Return DMG path
-        Ok(format!("{}/{}.dmg", &self.dmg_path, version))
+        Ok(format!("{}/{}.dmg", &base_path, version))
     }
 }
 

@@ -234,8 +234,12 @@ async fn list_apps(
             return Err(warp::reject());
         }
     };
+    let udid = client.udid.clone();
+    let ip = client.ip.clone();
 
-    match device_connection::connect_device(&client.udid, client.ip.as_str()).await {
+    drop(backend);
+
+    match device_connection::connect_device(&udid, &ip).await {
         true => {}
         false => {
             println!("Unable to connect to device");
@@ -243,7 +247,7 @@ async fn list_apps(
         }
     };
 
-    let device = match libimobiledevice::get_device(client.udid.clone()) {
+    let device = match libimobiledevice::get_device(udid.clone()) {
         Ok(device) => device,
         Err(_) => {
             println!("Unable to get device");
@@ -322,8 +326,11 @@ async fn shortcuts_run(
         }
     };
     let udid = client.udid.clone();
+    let ip = client.ip.clone();
+    let dmg_path = backend.dmg_path.clone();
+    drop(backend);
 
-    match device_connection::connect_device(&client.udid, client.ip.as_str()).await {
+    match device_connection::connect_device(&udid, ip.as_str()).await {
         true => {}
         false => {
             println!("Unable to connect to device");
@@ -331,7 +338,7 @@ async fn shortcuts_run(
         }
     };
 
-    let device = match libimobiledevice::get_device(client.udid.clone()) {
+    let device = match libimobiledevice::get_device(udid.clone()) {
         Ok(device) => device,
         Err(_) => {
             println!("Unable to get device");
@@ -360,7 +367,7 @@ async fn shortcuts_run(
     };
     println!("iOS Version: {}", ios_version);
 
-    let dmg_path = match backend.get_ios_dmg(&ios_version).await {
+    let dmg_path = match backend::Backend::get_ios_dmg(&dmg_path, &ios_version).await {
         Ok(dmg_path) => dmg_path,
         Err(_) => {
             println!("Error: no dmg found for this version");
