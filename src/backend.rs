@@ -161,7 +161,12 @@ impl Backend {
         let tmp_path = format!("{}/tmp", &self.dmg_path);
         std::fs::create_dir_all(&tmp_path).unwrap();
         // Unzip zip
-        let mut dmg_zip = zip::ZipArchive::new(std::fs::File::open("dmg.zip").unwrap()).unwrap();
+        let mut dmg_zip = match zip::ZipArchive::new(std::fs::File::open("dmg.zip").unwrap()) {
+            Ok(dmg_zip) => dmg_zip,
+            Err(_) => {
+                return Err("Error opening DMG.zip".to_string());
+            }
+        };
         match dmg_zip.extract(&tmp_path) {
             Ok(_) => {}
             Err(e) => return Err(format!("Failed to unzip DMG: {:?}", e)),

@@ -232,6 +232,7 @@ async fn list_apps(
     addr: Option<SocketAddr>,
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
+    println!("Device list requested");
     let mut backend = backend.lock().await;
     if let None = addr {
         println!("No address provided");
@@ -322,6 +323,7 @@ async fn shortcuts_run(
     addr: Option<SocketAddr>,
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
+    println!("Device has sent request to launch {}", app);
     let mut backend = backend.lock().await;
     if let None = addr {
         println!("No address provided");
