@@ -29,12 +29,6 @@ mod packets;
 async fn main() {
     let config = config::Config::load();
     let current_dir = std::env::current_dir().expect("failed to read current directory");
-    match device_connection::unregister_all_devices().await {
-        Ok(_) => {}
-        Err(e) => {
-            println!("Failed to unregister devices: {}", e);
-        }
-    }
     let backend = Arc::new(Mutex::new(backend::Backend::load(&config)));
     let upload_backend = backend.clone();
     let status_backend = backend.clone();
@@ -186,15 +180,6 @@ async fn upload_file(
                 Ok(_) => {}
                 Err(_) => {
                     return Ok(packets::upload_response(false, "Client already registered"));
-                }
-            }
-            match device_connection::unregister_device(&udid).await {
-                Ok(_) => {}
-                Err(_) => {
-                    return Ok(packets::upload_response(
-                        false,
-                        "Unable to unregister device",
-                    ));
                 }
             }
             return Ok(packets::upload_response(true, ""));

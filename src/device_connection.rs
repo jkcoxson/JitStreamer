@@ -25,7 +25,7 @@ pub async fn unregister_device(udid: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-pub async fn unregister_all_devices() -> Result<(), std::io::Error> {
+pub async fn _unregister_all_devices() -> Result<(), std::io::Error> {
     let udids = match rusty_libimobiledevice::libimobiledevice::get_udid_list() {
         Ok(udids) => udids,
         Err(_) => {
@@ -47,14 +47,10 @@ pub async fn unregister_all_devices() -> Result<(), std::io::Error> {
 
 pub async fn connect_device(udid: &str, ip: &str) -> bool {
     // Wait for 0.5 seconds to give the device time to unregister
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     println!("Waiting for device to appear in muxer...");
     // Register the device
     register_device(udid, ip).await.ok();
     for _ in 0..20 {
-        // Wait for 1 seconds to give the device time to register
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        // Determine if the device is connected
         let udids = match rusty_libimobiledevice::libimobiledevice::get_udid_list() {
             Ok(udids) => udids,
             Err(_) => {
@@ -64,6 +60,8 @@ pub async fn connect_device(udid: &str, ip: &str) -> bool {
         if udids.contains(&udid.to_string()) {
             return true;
         }
+        // Wait for 1 seconds to give the device time to register
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
     }
     false
 }
