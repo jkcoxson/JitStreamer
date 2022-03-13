@@ -311,10 +311,6 @@ async fn list_apps(
         }
         to_ret[i] = serde_json::Value::String(i.to_string());
     }
-    // Deregister device when not in use
-    match device_connection::unregister_device(&client.udid).await {
-        _ => {}
-    }
     Ok(to_ret.to_string())
 }
 

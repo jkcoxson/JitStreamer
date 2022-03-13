@@ -46,8 +46,6 @@ pub async fn unregister_all_devices() -> Result<(), std::io::Error> {
 }
 
 pub async fn connect_device(udid: &str, ip: &str) -> bool {
-    // Unregister the device just in case heartbeat has failed
-    unregister_device(udid).await.ok();
     // Wait for 0.5 seconds to give the device time to unregister
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     println!("Waiting for device to appear in muxer...");
