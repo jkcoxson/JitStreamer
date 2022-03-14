@@ -21,6 +21,7 @@ mod packets;
 
 #[tokio::main]
 async fn main() {
+    println!("Starting JitStreamer...");
     let config = config::Config::load();
     let current_dir = std::env::current_dir().expect("failed to read current directory");
     let backend = Arc::new(Mutex::new(backend::Backend::load(&config)));
@@ -38,7 +39,7 @@ async fn main() {
 
     // Status route
     let status_route = warp::path("status")
-        .and(warp::post())
+        .and(warp::get())
         .and(warp::filters::addr::remote())
         .and_then(move |addr| status(addr, status_backend.clone()));
 
@@ -50,7 +51,9 @@ async fn main() {
     });
 
     // Version route
-    let version_route = warp::path("version").map(|| "0.1.1");
+    let version_route = warp::path("version")
+        .and(warp::get())
+        .and_then(|| version_route());
 
     // Shortcuts route
     let list_apps_route = warp::path!("shortcuts" / "list_apps")
@@ -75,6 +78,7 @@ async fn main() {
     let addr: std::net::SocketAddr = format!("{}:{}", config.host, config.port)
         .parse()
         .expect("Invalid address");
+    println!("Ready!\n");
     warp::serve(routes).run(addr).await;
 }
 
@@ -96,30 +100,34 @@ fn root_redirect() -> BoxedFilter<(impl Reply,)> {
         .boxed()
 }
 
+async fn version_route() -> Result<impl Reply, Rejection> {
+    Ok("0.1.1")
+}
+
 async fn upload_file(
     form: FormData,
     address: Option<SocketAddr>,
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
-    let mut backend = backend.lock().await;
-    let parts: Vec<Part> = form.try_collect().await.map_err(|e| {
-        eprintln!("form error: {}", e);
-        warp::reject::reject()
-    })?;
+    let lock = backend.lock().await;
+    let parts: Vec<Part> = match form.try_collect().await {
+        Ok(parts) => parts,
+        Err(_) => return Ok(packets::upload_response(false, "Form error")),
+    };
 
     for p in parts {
         if p.name() == "file" {
-            let value = p
+            let value = match p
                 .stream()
                 .try_fold(Vec::new(), |mut vec, data| {
                     vec.put(data);
                     async move { Ok(vec) }
                 })
                 .await
-                .map_err(|e| {
-                    eprintln!("reading file error: {}", e);
-                    warp::reject::reject()
-                })?;
+            {
+                Ok(value) => value,
+                Err(_) => return Ok(packets::upload_response(false, "File error")),
+            };
 
             // Get string from value
             let value = match String::from_utf8(value) {
@@ -144,7 +152,7 @@ async fn upload_file(
             };
             let plist: Plist = Plist::from_xml(value).unwrap();
             // Save the plist to the plist storage directory
-            match backend.write_pairing_file(plist.to_string(), &udid) {
+            match lock.write_pairing_file(plist.to_string(), &udid) {
                 Ok(_) => {}
                 Err(_) => {
                     return Ok(packets::upload_response(
@@ -153,19 +161,19 @@ async fn upload_file(
                     ));
                 }
             }
+            drop(lock);
             // Make sure that the client is valid before adding it to the backend
-            match backend.get_by_ip(&address.ip().to_string()) {
-                Some(client) => {
-                    if client.udid == udid {
-                        return Ok(packets::upload_response(true, ""));
-                    }
-                }
-                None => {
-                    return Ok(packets::upload_response(false, "Invalid client"));
+            match backend::Backend::test_new_client(&address.ip().to_string(), &udid).await {
+                Ok(_) => {}
+                Err(_) => {
+                    return Ok(packets::upload_response(
+                        false,
+                        "Device did not respond to pairing test",
+                    ));
                 }
             }
-
-            match backend.register_client(address.ip().to_string(), udid.clone()) {
+            let mut lock = backend.lock().await;
+            match lock.register_client(address.ip().to_string(), udid.clone()) {
                 Ok(_) => {}
                 Err(_) => {
                     return Ok(packets::upload_response(false, "Client already registered"));
@@ -230,13 +238,46 @@ async fn list_apps(
     drop(backend);
     let v = match client.get_apps().await {
         Ok(v) => v,
-        Err(_) => {
+        Err(e) => {
             println!("Unable to get apps");
-            return Err(warp::reject());
+            return Ok(packets::list_apps_response(
+                false,
+                &format!("Unable to get apps: {}", e).to_string(),
+                vec![],
+            ));
         }
     };
 
-    Ok(packets::list_apps_response(true, "", v))
+    // Trim the list of apps
+    let mut apps = vec![];
+    for i in v {
+        if i.starts_with("com.apple") {
+            continue;
+        }
+        if i.starts_with("com.google") {
+            continue;
+        }
+        if i.to_lowercase().contains("dolphin") {
+            apps.insert(0, i);
+            continue;
+        }
+        if i.to_lowercase().contains("utm") {
+            apps.insert(0, i);
+            continue;
+        }
+        if i.to_lowercase().contains("provenance") {
+            apps.insert(0, i);
+            continue;
+        }
+        if i.to_lowercase().contains("delta") {
+            apps.insert(0, i);
+            continue;
+        }
+        apps.push(i);
+    }
+    println!("Returning: {:?}", apps);
+
+    Ok(packets::list_apps_response(true, "", apps))
 }
 
 async fn shortcuts_run(

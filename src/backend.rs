@@ -1,5 +1,7 @@
 // jkcoxson
 
+const SERVICE_NAME: &str = "12:34:56:78:90:AB@fe80::de52:85ff:fece:c422._apple-mobdev2._tcp";
+
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -107,6 +109,45 @@ impl Backend {
             Ok(_) => Ok(()),
             Err(_) => Err(()),
         }
+    }
+
+    pub async fn test_new_client(ip: &String, udid: &String) -> Result<(), ()> {
+        let udids = match rusty_libimobiledevice::libimobiledevice::get_udid_list() {
+            Ok(udids) => udids,
+            Err(_) => {
+                println!("Error getting udid list");
+                return Err(());
+            }
+        };
+        if udids.contains(udid) {
+            return Ok(());
+        }
+        // Register with usbmuxd
+        let mut stream = match tokio::net::TcpStream::connect("127.0.0.1:32498").await {
+            Ok(stream) => stream,
+            Err(_) => {
+                return Err(());
+            }
+        };
+        // Send the register packet
+        match tokio::io::AsyncWriteExt::write_all(
+            &mut stream,
+            format!("1\n{}\n{}\n{}\n", udid, SERVICE_NAME, ip).as_bytes(),
+        )
+        .await
+        {
+            _ => (),
+        };
+        // Wait for a few seconds for it to register
+        tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+        let udids = match rusty_libimobiledevice::libimobiledevice::get_udid_list() {
+            Ok(udids) => udids,
+            Err(_) => return Err(()),
+        };
+        if udids.contains(udid) {
+            return Ok(());
+        }
+        Err(())
     }
 }
 
