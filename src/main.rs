@@ -49,6 +49,9 @@ async fn main() {
         ))
     });
 
+    // Version route
+    let version_route = warp::path("version").map(|| "0.1.1");
+
     // Shortcuts route
     let list_apps_route = warp::path!("shortcuts" / "list_apps")
         .and(warp::get())
@@ -66,6 +69,7 @@ async fn main() {
         .or(status_route)
         .or(list_apps_route)
         .or(shortcuts_launch_route)
+        .or(version_route)
         .or(admin_route);
 
     let addr: std::net::SocketAddr = format!("{}:{}", config.host, config.port)
