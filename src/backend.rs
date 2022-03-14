@@ -188,11 +188,7 @@ impl Backend {
         let ios_dmg = dmg_path.join("DeveloperDiskImage.dmg");
         std::fs::rename(ios_dmg, format!("{}/{}.dmg", &base_path, version)).unwrap();
         let ios_sig = dmg_path.join("DeveloperDiskImage.dmg.signature");
-        std::fs::rename(
-            ios_sig,
-            format!("{}/{}.dmg.signature", &base_path, version),
-        )
-        .unwrap();
+        std::fs::rename(ios_sig, format!("{}/{}.dmg.signature", &base_path, version)).unwrap();
 
         // Remove tmp path
         std::fs::remove_dir_all(tmp_path).unwrap();
@@ -208,7 +204,7 @@ impl Backend {
 
 #[derive(Serialize, Deserialize, Debug)]
 /// Representation of an iDevice's information.
-pub struct Client {
+pub struct DeserialiedClient {
     /// The iDevice's IP on the VLAN.
     pub ip: String,
     /// The iDevice's UDID used to identify it.

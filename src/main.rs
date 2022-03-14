@@ -21,6 +21,7 @@ use warp::{
 };
 
 mod backend;
+mod client;
 mod config;
 mod device_connection;
 mod packets;
