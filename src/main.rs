@@ -3,7 +3,7 @@
 use backend::Backend;
 use bytes::BufMut;
 use futures::TryStreamExt;
-use rusty_libimobiledevice::plist::Plist;
+use rusty_libimobiledevice::{debug, plist::Plist};
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
 use warp::{
@@ -206,10 +206,10 @@ async fn list_apps(
     addr: Option<SocketAddr>,
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
-    println!("Device list requested");
+    debug!("Device list requested");
     let mut backend = backend.lock().await;
     if let None = addr {
-        println!("No address provided");
+        debug!("No address provided");
         return Ok(packets::list_apps_response(
             false,
             "Unable to get IP address",
@@ -217,7 +217,7 @@ async fn list_apps(
         ));
     }
     if !addr.unwrap().to_string().starts_with(&backend.allowed_ip) {
-        println!("Address not allowed");
+        debug!("Address not allowed");
         return Ok(packets::list_apps_response(
             false,
             "Address not allowed, connect to the VLAN",
@@ -227,7 +227,7 @@ async fn list_apps(
     let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
         Some(client) => client,
         None => {
-            println!("No client found with the given IP");
+            debug!("No client found with the given IP");
             return Ok(packets::list_apps_response(
                 false,
                 "No client found with the given IP, please register your device",
@@ -239,7 +239,7 @@ async fn list_apps(
     let v = match client.get_apps().await {
         Ok(v) => v,
         Err(e) => {
-            println!("Unable to get apps");
+            debug!("Unable to get apps");
             return Ok(packets::list_apps_response(
                 false,
                 &format!("Unable to get apps: {}", e).to_string(),
@@ -275,7 +275,6 @@ async fn list_apps(
         }
         apps.push(i);
     }
-    println!("Returning: {:?}", apps);
 
     Ok(packets::list_apps_response(true, "", apps))
 }
@@ -285,14 +284,14 @@ async fn shortcuts_run(
     addr: Option<SocketAddr>,
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
-    println!("Device has sent request to launch {}", app);
+    debug!("Device has sent request to launch {}", app);
     let mut backend = backend.lock().await;
     if let None = addr {
-        println!("No address provided");
+        debug!("No address provided");
         return Ok(packets::launch_response(false, "Unable to get IP address"));
     }
     if !addr.unwrap().to_string().starts_with(&backend.allowed_ip) {
-        println!("Address not allowed");
+        debug!("Address not allowed");
         return Ok(packets::launch_response(
             false,
             "Address not allowed, connect to the VLAN",
@@ -301,7 +300,7 @@ async fn shortcuts_run(
     let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
         Some(client) => client,
         None => {
-            println!("No client found with the given IP");
+            debug!("No client found with the given IP");
             return Ok(packets::launch_response(
                 false,
                 "No client found with the given IP, please register your device",
@@ -315,7 +314,7 @@ async fn shortcuts_run(
             return Ok(packets::launch_response(true, ""));
         }
         Err(e) => {
-            println!("Unable to run app");
+            debug!("Unable to run app");
             return Ok(packets::launch_response(false, &e));
         }
     };

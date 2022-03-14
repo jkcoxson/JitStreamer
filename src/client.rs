@@ -1,6 +1,7 @@
 // jkcoxson
 
 use rusty_libimobiledevice::{
+    debug,
     instproxy::InstProxyClient,
     libimobiledevice::{get_device, get_udid_list, Device},
     plist::{Plist, PlistDictIter},
@@ -77,7 +78,7 @@ impl Client {
         let instproxy_client = match device.new_instproxy_client("jitstreamer".to_string()) {
             Ok(instproxy) => instproxy,
             Err(e) => {
-                println!("Error starting instproxy: {:?}", e);
+                debug!("Error starting instproxy: {:?}", e);
                 return Err("Unable to start instproxy".to_string());
             }
         };
@@ -97,7 +98,7 @@ impl Client {
         let lookup_results = match instproxy_client.lookup(vec![], client_opts) {
             Ok(apps) => apps,
             Err(e) => {
-                println!("Error looking up apps: {:?}", e);
+                debug!("Error looking up apps: {:?}", e);
                 return Err("Unable to lookup apps".to_string());
             }
         };
@@ -126,7 +127,7 @@ impl Client {
         let instproxy_client = match device.new_instproxy_client("idevicedebug".to_string()) {
             Ok(instproxy) => instproxy,
             Err(e) => {
-                println!("Error starting instproxy: {:?}", e);
+                debug!("Error starting instproxy: {:?}", e);
                 return Err("Unable to start instproxy".to_string());
             }
         };
@@ -147,7 +148,7 @@ impl Client {
         let lookup_results = match instproxy_client.lookup(vec![app.clone()], client_opts) {
             Ok(apps) => apps,
             Err(e) => {
-                println!("Error looking up apps: {:?}", e);
+                debug!("Error looking up apps: {:?}", e);
                 return Err("Unable to lookup apps".to_string());
             }
         };
@@ -156,7 +157,7 @@ impl Client {
         let working_directory = match lookup_results.dict_get_item("Container") {
             Ok(p) => p,
             Err(_) => {
-                println!("App not found");
+                debug!("App not found");
                 return Err("App not found".to_string());
             }
         };
@@ -164,16 +165,16 @@ impl Client {
         let working_directory = match working_directory.get_string_val() {
             Ok(p) => p,
             Err(_) => {
-                println!("App not found");
+                debug!("App not found");
                 return Err("App not found".to_string());
             }
         };
-        println!("Working directory: {}", working_directory);
+        debug!("Working directory: {}", working_directory);
 
         let bundle_path = match instproxy_client.get_path_for_bundle_identifier(app) {
             Ok(p) => p,
             Err(e) => {
-                println!("Error getting path for bundle identifier: {:?}", e);
+                debug!("Error getting path for bundle identifier: {:?}", e);
                 return Err("Unable to get path for bundle identifier".to_string());
             }
         };
@@ -200,41 +201,47 @@ impl Client {
         let debug_server = debug_server.unwrap();
 
         match debug_server.send_command("QSetMaxPacketSize: 1024".into()) {
-            Ok(res) => println!("Successfully set max packet size: {:?}", res),
+            Ok(res) => {
+                debug!("Successfully set max packet size: {:?}", res);
+            }
             Err(e) => {
-                println!("Error setting max packet size: {:?}", e);
+                debug!("Error setting max packet size: {:?}", e);
                 return Err("Unable to set max packet size".to_string());
             }
         }
 
         match debug_server.send_command(format!("QSetWorkingDir: {}", working_directory).into()) {
-            Ok(res) => println!("Successfully set working directory: {:?}", res),
+            Ok(res) => {
+                debug!("Successfully set working directory: {:?}", res);
+            }
             Err(e) => {
-                println!("Error setting working directory: {:?}", e);
+                debug!("Error setting working directory: {:?}", e);
                 return Err("Unable to set working directory".to_string());
             }
         }
 
         match debug_server.set_argv(vec![bundle_path.clone(), bundle_path.clone()]) {
-            Ok(res) => println!("Successfully set argv: {:?}", res),
+            Ok(res) => {
+                debug!("Successfully set argv: {:?}", res);
+            }
             Err(e) => {
-                println!("Error setting argv: {:?}", e);
+                debug!("Error setting argv: {:?}", e);
                 return Err("Unable to set argv".to_string());
             }
         }
 
         match debug_server.send_command("qLaunchSuccess".into()) {
-            Ok(res) => println!("Got launch response: {:?}", res),
+            Ok(res) => debug!("Got launch response: {:?}", res),
             Err(e) => {
-                println!("Error checking if app launched: {:?}", e);
+                debug!("Error checking if app launched: {:?}", e);
                 return Err("Unable to check if app launched".to_string());
             }
         }
 
         match debug_server.send_command("D".into()) {
-            Ok(res) => println!("Detaching: {:?}", res),
+            Ok(res) => debug!("Detaching: {:?}", res),
             Err(e) => {
-                println!("Error detaching: {:?}", e);
+                debug!("Error detaching: {:?}", e);
                 return Err("Unable to detach".to_string());
             }
         }
@@ -252,11 +259,11 @@ impl Client {
 
         let lockdown_client = match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
             Ok(lckd) => {
-                println!("Successfully connected to lockdownd");
+                debug!("Successfully connected to lockdownd");
                 lckd
             }
             Err(e) => {
-                println!("Error starting lockdown service: {:?}", e);
+                debug!("Error starting lockdown service: {:?}", e);
                 return Err("Unable to start lockdown".to_string());
             }
         };
@@ -265,12 +272,12 @@ impl Client {
             match lockdown_client.get_value("ProductVersion".to_string(), "".to_string()) {
                 Ok(ios_version) => ios_version.get_string_val().unwrap(),
                 Err(e) => {
-                    println!("Error getting iOS version: {:?}", e);
+                    debug!("Error getting iOS version: {:?}", e);
                     return Err("Unable to get iOS version".to_string());
                 }
             };
 
-        println!("iOS version: {}", ios_version);
+        debug!("iOS version: {}", ios_version);
 
         Ok(ios_version)
     }
@@ -292,7 +299,7 @@ impl Client {
             return Ok(path);
         }
         // Download versions.json from GitHub
-        println!("Downloading iOS dictionary...");
+        debug!("Downloading iOS dictionary...");
         let url = "https://raw.githubusercontent.com/jkcoxson/jit_shipper/master/versions.json";
         let response = match reqwest::get(url).await {
             Ok(response) => response,
@@ -314,7 +321,7 @@ impl Client {
             None => return Err("DMG library does not contain your iOS version".to_string()),
         };
         // Download DMG zip
-        println!("Downloading iOS {} DMG...", ios_version.clone());
+        debug!("Downloading iOS {} DMG...", ios_version.clone());
         let resp = match reqwest::get(ios_dmg_url).await {
             Ok(resp) => resp,
             Err(_) => {
@@ -399,11 +406,11 @@ impl Client {
         let mut lockdown_client =
             match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
                 Ok(lckd) => {
-                    println!("Successfully connected to lockdownd");
+                    debug!("Successfully connected to lockdownd");
                     lckd
                 }
                 Err(e) => {
-                    println!("Error starting lockdown service: {:?}", e);
+                    debug!("Error starting lockdown service: {:?}", e);
                     return Err("Unable to start lockdown".to_string());
                 }
             };
@@ -412,11 +419,11 @@ impl Client {
             .start_service("com.apple.mobile.mobile_image_mounter".to_string())
         {
             Ok(service) => {
-                println!("Successfully started com.apple.mobile.mobile_image_mounter");
+                debug!("Successfully started com.apple.mobile.mobile_image_mounter");
                 service
             }
             Err(e) => {
-                println!(
+                debug!(
                     "Error starting com.apple.mobile.mobile_image_mounter: {:?}",
                     e
                 );
@@ -426,11 +433,11 @@ impl Client {
 
         let mim = match device.new_mobile_image_mounter(&service) {
             Ok(mim) => {
-                println!("Successfully started mobile_image_mounter");
+                debug!("Successfully started mobile_image_mounter");
                 mim
             }
             Err(e) => {
-                println!("Error starting mobile_image_mounter: {:?}", e);
+                debug!("Error starting mobile_image_mounter: {:?}", e);
                 return Err("Unable to start mobile_image_mounter".to_string());
             }
         };
@@ -441,10 +448,10 @@ impl Client {
             format!("{}.signature", dmg_path.clone()).to_string(),
         ) {
             Ok(_) => {
-                println!("Successfully uploaded image");
+                debug!("Successfully uploaded image");
             }
             Err(e) => {
-                println!("Error uploading image: {:?}", e);
+                debug!("Error uploading image: {:?}", e);
                 return Err("Unable to upload developer disk image".to_string());
             }
         }
@@ -454,10 +461,10 @@ impl Client {
             format!("{}.signature", dmg_path.clone()).to_string(),
         ) {
             Ok(_) => {
-                println!("Successfully mounted image");
+                debug!("Successfully mounted image");
             }
             Err(e) => {
-                println!("Error mounting image: {:?}", e);
+                debug!("Error mounting image: {:?}", e);
                 return Err("Unable to mount developer disk image".to_string());
             }
         }

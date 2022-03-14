@@ -2,6 +2,7 @@
 
 const SERVICE_NAME: &str = "12:34:56:78:90:AB@fe80::de52:85ff:fece:c422._apple-mobdev2._tcp";
 
+use rusty_libimobiledevice::debug;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -115,7 +116,7 @@ impl Backend {
         let udids = match rusty_libimobiledevice::libimobiledevice::get_udid_list() {
             Ok(udids) => udids,
             Err(_) => {
-                println!("Error getting udid list");
+                debug!("Error getting udid list");
                 return Err(());
             }
         };
