@@ -3,14 +3,8 @@
 use backend::Backend;
 use bytes::BufMut;
 use futures::TryStreamExt;
-use rusty_libimobiledevice::plist::{Plist, PlistDictIter};
-use rusty_libimobiledevice::{instproxy::InstProxyClient, libimobiledevice};
-use std::{
-    net::SocketAddr,
-    str::FromStr,
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use rusty_libimobiledevice::plist::Plist;
+use std::{net::SocketAddr, str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
 use warp::{
     filters::BoxedFilter,
@@ -23,7 +17,6 @@ use warp::{
 mod backend;
 mod client;
 mod config;
-mod device_connection;
 mod packets;
 
 #[tokio::main]
@@ -157,23 +150,14 @@ async fn upload_file(
                 }
             }
             // Make sure that the client is valid before adding it to the backend
-            match device_connection::connect_device(&udid, &address.ip().to_string()).await {
-                true => {}
-                false => {
-                    // Remove the pairing file
-                    match backend.remove_pairing_file(&udid) {
-                        Ok(_) => {}
-                        Err(_) => {
-                            return Ok(packets::upload_response(
-                                false,
-                                "Unable to remove pairing file",
-                            ));
-                        }
-                    };
-                    return Ok(packets::upload_response(
-                        false,
-                        "Unable to connect to device",
-                    ));
+            match backend.get_by_ip(&address.ip().to_string()) {
+                Some(client) => {
+                    if client.udid == udid {
+                        return Ok(packets::upload_response(true, ""));
+                    }
+                }
+                None => {
+                    return Ok(packets::upload_response(false, "Invalid client"));
                 }
             }
 
@@ -201,17 +185,9 @@ async fn status(
         return Ok(packets::status_packet(false, false));
     }
     match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
-        Some(client) => {
-            let start = SystemTime::now();
-            let since_the_epoch = start
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards");
-            client.last_seen = since_the_epoch.as_secs();
-        }
+        Some(_) => return Ok(packets::status_packet(true, true)),
         None => return Ok(packets::status_packet(true, false)),
     };
-
-    Ok(packets::status_packet(true, true))
 }
 
 async fn list_apps(
@@ -222,86 +198,41 @@ async fn list_apps(
     let mut backend = backend.lock().await;
     if let None = addr {
         println!("No address provided");
-        return Err(warp::reject());
+        return Ok(packets::list_apps_response(
+            false,
+            "Unable to get IP address",
+            vec![],
+        ));
     }
     if !addr.unwrap().to_string().starts_with(&backend.allowed_ip) {
         println!("Address not allowed");
-        return Err(warp::reject());
+        return Ok(packets::list_apps_response(
+            false,
+            "Address not allowed, connect to the VLAN",
+            vec![],
+        ));
     }
     let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
         Some(client) => client,
         None => {
             println!("No client found with the given IP");
-            return Err(warp::reject());
+            return Ok(packets::list_apps_response(
+                false,
+                "No client found with the given IP, please register your device",
+                vec![],
+            ));
         }
     };
-    let udid = client.udid.clone();
-    let ip = client.ip.clone();
-
     drop(backend);
-
-    match device_connection::connect_device(&udid, &ip).await {
-        true => {}
-        false => {
-            println!("Unable to connect to device");
-            return Err(warp::reject());
-        }
-    };
-
-    let device = match libimobiledevice::get_device(udid.clone()) {
-        Ok(device) => device,
+    let v = match client.get_apps().await {
+        Ok(v) => v,
         Err(_) => {
-            println!("Unable to get device");
+            println!("Unable to get apps");
             return Err(warp::reject());
         }
     };
 
-    let instproxy_client = match device.new_instproxy_client("jitstreamer".to_string()) {
-        Ok(instproxy) => instproxy,
-        Err(e) => {
-            println!("Error starting instproxy: {:?}", e);
-            return Err(warp::reject());
-        }
-    };
-    let mut client_opts = InstProxyClient::options_new();
-    InstProxyClient::options_add(
-        &mut client_opts,
-        vec![("ApplicationType".to_string(), Plist::new_string("Any"))],
-    );
-    InstProxyClient::options_set_return_attributes(
-        &mut client_opts,
-        vec![
-            "CFBundleIdentifier".to_string(),
-            "CFBundleExecutable".to_string(),
-            "Container".to_string(),
-        ],
-    );
-    let lookup_results = match instproxy_client.lookup(vec![], client_opts) {
-        Ok(apps) => apps,
-        Err(e) => {
-            println!("Error looking up apps: {:?}", e);
-            return Err(warp::reject());
-        }
-    };
-
-    let mut p_iter = PlistDictIter::from(lookup_results);
-    let mut apps = Vec::new();
-    loop {
-        let app = match p_iter.next_item() {
-            Some(app) => app,
-            None => break,
-        };
-        apps.push(app.0);
-    }
-
-    let mut to_ret = serde_json::Value::Object(serde_json::Map::new());
-    for i in apps {
-        if i.starts_with("com.apple.") || i.starts_with("com.google.") {
-            continue;
-        }
-        to_ret[i] = serde_json::Value::String(i.to_string());
-    }
-    Ok(to_ret.to_string())
+    Ok(packets::list_apps_response(true, "", v))
 }
 
 async fn shortcuts_run(
@@ -313,260 +244,34 @@ async fn shortcuts_run(
     let mut backend = backend.lock().await;
     if let None = addr {
         println!("No address provided");
-        return Err(warp::reject());
+        return Ok(packets::launch_response(false, "Unable to get IP address"));
     }
     if !addr.unwrap().to_string().starts_with(&backend.allowed_ip) {
         println!("Address not allowed");
-        return Err(warp::reject());
+        return Ok(packets::launch_response(
+            false,
+            "Address not allowed, connect to the VLAN",
+        ));
     }
     let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
         Some(client) => client,
         None => {
             println!("No client found with the given IP");
-            return Err(warp::reject());
+            return Ok(packets::launch_response(
+                false,
+                "No client found with the given IP, please register your device",
+            ));
         }
     };
-    let udid = client.udid.clone();
-    let ip = client.ip.clone();
-    let dmg_path = backend.dmg_path.clone();
     drop(backend);
 
-    match device_connection::connect_device(&udid, ip.as_str()).await {
-        true => {}
-        false => {
-            println!("Unable to connect to device");
-            return Err(warp::reject());
-        }
-    };
-
-    let device = match libimobiledevice::get_device(udid.clone()) {
-        Ok(device) => device,
-        Err(_) => {
-            println!("Unable to get device");
-            return Err(warp::reject());
-        }
-    };
-
-    let lockdown_client = match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
-        Ok(lckd) => {
-            println!("Successfully connected to lockdownd");
-            lckd
+    match client.debug_app(app.clone()).await {
+        Ok(_) => {
+            return Ok(packets::launch_response(true, ""));
         }
         Err(e) => {
-            println!("Error starting lockdown service: {:?}", e);
-            return Err(warp::reject());
+            println!("Unable to run app");
+            return Ok(packets::launch_response(false, &e));
         }
     };
-
-    let ios_version = match lockdown_client.get_value("ProductVersion".to_string(), "".to_string())
-    {
-        Ok(ios_version) => ios_version.get_string_val().unwrap(),
-        Err(e) => {
-            println!("Error getting iOS version: {:?}", e);
-            return Err(warp::reject());
-        }
-    };
-    println!("iOS Version: {}", ios_version);
-
-    let dmg_path = match backend::Backend::get_ios_dmg(&dmg_path, &ios_version).await {
-        Ok(dmg_path) => dmg_path,
-        Err(_) => {
-            println!("Error: no dmg found for this version");
-            return Err(warp::reject());
-        }
-    };
-
-    // This is in an std thread because we do not want results back from this. It will block all new connections.
-    std::thread::spawn(move || {
-        shortcuts_launch_thread(udid, app, dmg_path);
-    });
-
-    Ok("success")
-}
-
-fn shortcuts_launch_thread(udid: String, app: String, dmg_path: String) {
-    let device = match libimobiledevice::get_device(udid) {
-        Ok(device) => device,
-        Err(_) => {
-            println!("Unable to get device");
-            return;
-        }
-    };
-
-    let mut lockdown_client = match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
-        Ok(lckd) => {
-            println!("Successfully connected to lockdownd");
-            lckd
-        }
-        Err(e) => {
-            println!("Error starting lockdown service: {:?}", e);
-            return;
-        }
-    };
-
-    let instproxy_client = match device.new_instproxy_client("idevicedebug".to_string()) {
-        Ok(instproxy) => instproxy,
-        Err(e) => {
-            println!("Error starting instproxy: {:?}", e);
-            return;
-        }
-    };
-
-    let mut client_opts = InstProxyClient::options_new();
-    InstProxyClient::options_add(
-        &mut client_opts,
-        vec![("ApplicationType".to_string(), Plist::new_string("Any"))],
-    );
-    InstProxyClient::options_set_return_attributes(
-        &mut client_opts,
-        vec![
-            "CFBundleIdentifier".to_string(),
-            "CFBundleExecutable".to_string(),
-            "Container".to_string(),
-        ],
-    );
-    let lookup_results = match instproxy_client.lookup(vec![app.clone()], client_opts) {
-        Ok(apps) => apps,
-        Err(e) => {
-            println!("Error looking up apps: {:?}", e);
-            return;
-        }
-    };
-    let lookup_results = lookup_results.dict_get_item(&app).unwrap();
-
-    let working_directory = match lookup_results.dict_get_item("Container") {
-        Ok(p) => p,
-        Err(_) => {
-            println!("App not found");
-            return;
-        }
-    };
-
-    let working_directory = match working_directory.get_string_val() {
-        Ok(p) => p,
-        Err(_) => {
-            println!("App not found");
-            return;
-        }
-    };
-    println!("Working directory: {}", working_directory);
-
-    let bundle_path = match instproxy_client.get_path_for_bundle_identifier(app) {
-        Ok(p) => p,
-        Err(e) => {
-            println!("Error getting path for bundle identifier: {:?}", e);
-            return;
-        }
-    };
-
-    println!("Bundle Path: {}", bundle_path);
-
-    let debug_server = match device.new_debug_server("jitstreamer") {
-        Ok(d) => d,
-        Err(_) => {
-            println!("Mounting the DMG");
-
-            let service = match lockdown_client
-                .start_service("com.apple.mobile.mobile_image_mounter".to_string())
-            {
-                Ok(service) => {
-                    println!("Successfully started com.apple.mobile.mobile_image_mounter");
-                    service
-                }
-                Err(e) => {
-                    println!(
-                        "Error starting com.apple.mobile.mobile_image_mounter: {:?}",
-                        e
-                    );
-                    return;
-                }
-            };
-
-            let mim = match device.new_mobile_image_mounter(&service) {
-                Ok(mim) => {
-                    println!("Successfully started mobile_image_mounter");
-                    mim
-                }
-                Err(e) => {
-                    println!("Error starting mobile_image_mounter: {:?}", e);
-                    return;
-                }
-            };
-
-            match mim.upload_image(
-                dmg_path.clone(),
-                "Developer".to_string(),
-                format!("{}.signature", dmg_path.clone()).to_string(),
-            ) {
-                Ok(_) => {
-                    println!("Successfully uploaded image");
-                }
-                Err(e) => {
-                    println!("Error uploading image: {:?}", e);
-                    return;
-                }
-            }
-            match mim.mount_image(
-                dmg_path.clone(),
-                "Developer".to_string(),
-                format!("{}.signature", dmg_path.clone()).to_string(),
-            ) {
-                Ok(_) => {
-                    println!("Successfully mounted image");
-                }
-                Err(e) => {
-                    println!("Error mounting image: {:?}", e);
-                    return;
-                }
-            }
-            let debug_server = match device.new_debug_server("jitstreamer") {
-                Ok(d) => d,
-                Err(e) => {
-                    println!("Error starting debug server: {:?}", e);
-                    return;
-                }
-            };
-            debug_server
-        }
-    };
-
-    match debug_server.send_command("QSetMaxPacketSize: 1024".into()) {
-        Ok(res) => println!("Successfully set max packet size: {:?}", res),
-        Err(e) => {
-            println!("Error setting max packet size: {:?}", e);
-            return;
-        }
-    }
-
-    match debug_server.send_command(format!("QSetWorkingDir: {}", working_directory).into()) {
-        Ok(res) => println!("Successfully set working directory: {:?}", res),
-        Err(e) => {
-            println!("Error setting working directory: {:?}", e);
-            return;
-        }
-    }
-
-    match debug_server.set_argv(vec![bundle_path.clone(), bundle_path.clone()]) {
-        Ok(res) => println!("Successfully set argv: {:?}", res),
-        Err(e) => {
-            println!("Error setting argv: {:?}", e);
-            return;
-        }
-    }
-
-    match debug_server.send_command("qLaunchSuccess".into()) {
-        Ok(res) => println!("Got launch response: {:?}", res),
-        Err(e) => {
-            println!("Error checking if app launched: {:?}", e);
-            return;
-        }
-    }
-
-    match debug_server.send_command("D".into()) {
-        Ok(res) => println!("Detaching: {:?}", res),
-        Err(e) => {
-            println!("Error detaching: {:?}", e);
-            return;
-        }
-    }
 }

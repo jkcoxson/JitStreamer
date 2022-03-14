@@ -7,6 +7,8 @@ use rusty_libimobiledevice::{
 };
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 
+use crate::backend::DeserializedClient;
+
 const SERVICE_NAME: &str = "12:34:56:78:90:AB@fe80::de52:85ff:fece:c422._apple-mobdev2._tcp";
 
 pub struct Client {
@@ -15,6 +17,7 @@ pub struct Client {
 }
 
 impl Client {
+    #[allow(dead_code)]
     pub fn new(ip: String, udid: String) -> Client {
         Client { ip, udid }
     }
@@ -42,12 +45,15 @@ impl Client {
                             }
                         };
                         // Send the register packet
-                        stream
+                        match stream
                             .write_all(
                                 format!("1\n{}\n{}\n{}\n", self.udid, SERVICE_NAME, self.ip)
                                     .as_bytes(),
                             )
-                            .await;
+                            .await
+                        {
+                            _ => (),
+                        };
                         // Wait for half a second for it to register
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
@@ -114,17 +120,6 @@ impl Client {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
-            }
-        };
-
-        let lockdown_client = match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
-            Ok(lckd) => {
-                println!("Successfully connected to lockdownd");
-                lckd
-            }
-            Err(e) => {
-                println!("Error starting lockdown service: {:?}", e);
-                return Err("Unable to start lockdown".to_string());
             }
         };
 
@@ -467,5 +462,14 @@ impl Client {
             }
         }
         Ok(())
+    }
+}
+
+impl From<&DeserializedClient> for Client {
+    fn from(client: &DeserializedClient) -> Self {
+        Client {
+            ip: client.ip.clone(),
+            udid: client.udid.clone(),
+        }
     }
 }
