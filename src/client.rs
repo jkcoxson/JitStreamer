@@ -348,6 +348,7 @@ impl Client {
         };
         // Create tmp path
         let tmp_path = format!("{}/dmg/tmp", &current_dir);
+        debug!("tmp path {}", tmp_path);
         std::fs::create_dir_all(&tmp_path).unwrap();
         // Unzip zip
         let mut dmg_zip = match zip::ZipArchive::new(std::fs::File::open("dmg.zip").unwrap()) {
