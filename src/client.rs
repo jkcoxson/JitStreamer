@@ -81,7 +81,10 @@ impl Client {
                     };
                     // Send the unregister packet
                     match stream
-                        .write_all(format!("0\n{}\n{}\n", self.udid, SERVICE_NAME).as_bytes())
+                        .write_all(
+                            format!("0\n{}\n{}\n{}\n", self.udid, SERVICE_NAME, "0.0.0.0")
+                                .as_bytes(),
+                        )
                         .await
                     {
                         _ => (),
