@@ -67,6 +67,36 @@ impl Client {
         Err(())
     }
 
+    pub async fn disconnect(&self) -> Result<(), ()> {
+        // Determine if device is in the muxer
+        match get_udid_list() {
+            Ok(udids) => {
+                // If the device is in the UDID list, send the disconnect packet
+                if udids.contains(&self.udid) {
+                    let mut stream = match TcpStream::connect("127.0.0.1:32498").await {
+                        Ok(stream) => stream,
+                        Err(_) => {
+                            return Err(());
+                        }
+                    };
+                    // Send the unregister packet
+                    match stream
+                        .write_all(format!("0\n{}\n{}\n", self.udid, SERVICE_NAME).as_bytes())
+                        .await
+                    {
+                        _ => (),
+                    };
+                    return Ok(());
+                } else {
+                    return Ok(());
+                }
+            }
+            Err(_) => {
+                return Err(());
+            }
+        }
+    }
+
     pub async fn get_apps(&self) -> Result<Vec<String>, String> {
         let device = match self.connect().await {
             Ok(device) => device,
