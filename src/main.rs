@@ -314,13 +314,13 @@ async fn shortcuts_run(
 
     match client.debug_app(app.clone()).await {
         Ok(_) => {
-            match client.disconnect() {
+            match client.disconnect().await {
                 _ => {}
             }
             return Ok(packets::launch_response(true, ""));
         }
         Err(e) => {
-            match client.disconnect() {
+            match client.disconnect().await {
                 _ => {}
             }
             debug!("Unable to run app");

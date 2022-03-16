@@ -68,6 +68,7 @@ impl Client {
     }
 
     pub async fn disconnect(&self) -> Result<(), ()> {
+        debug!("Disconnecting from {}", &self.udid);
         // Determine if device is in the muxer
         match get_udid_list() {
             Ok(udids) => {
@@ -76,10 +77,12 @@ impl Client {
                     let mut stream = match TcpStream::connect("127.0.0.1:32498").await {
                         Ok(stream) => stream,
                         Err(_) => {
+                            debug!("Failed to connect to usbmuxd2");
                             return Err(());
                         }
                     };
                     // Send the unregister packet
+                    debug!("Sending unregister packet");
                     match stream
                         .write_all(
                             format!("0\n{}\n{}\n{}\n", self.udid, SERVICE_NAME, "0.0.0.0")
@@ -91,10 +94,12 @@ impl Client {
                     };
                     return Ok(());
                 } else {
+                    debug!("Did not contain the UDID, returning");
                     return Ok(());
                 }
             }
             Err(_) => {
+                debug!("Failed to get UDID list");
                 return Err(());
             }
         }
