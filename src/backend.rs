@@ -139,14 +139,16 @@ impl Backend {
         {
             _ => (),
         };
-        // Wait for a few seconds for it to register
-        tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
-        let udids = match rusty_libimobiledevice::libimobiledevice::get_udid_list() {
-            Ok(udids) => udids,
-            Err(_) => return Err(()),
-        };
-        if udids.contains(udid) {
-            return Ok(());
+        for _ in 1..20 {
+            // Wait for a few seconds for it to register
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            let udids = match rusty_libimobiledevice::libimobiledevice::get_udid_list() {
+                Ok(udids) => udids,
+                Err(_) => return Err(()),
+            };
+            if udids.contains(udid) {
+                return Ok(());
+            }
         }
         Err(())
     }
