@@ -12,7 +12,8 @@ pub struct Config {
     pub database_path: String,
     pub plist_storage: String,
     pub dmg_path: String,
-    pub allowed_ip: String,
+    pub altserver_path: String,
+    pub allowed_ips: Vec<String>,
 }
 
 impl Config {
@@ -38,7 +39,8 @@ impl Config {
             database_path: "./database.json".to_string(),
             plist_storage: "/var/lib/lockdown/".to_string(),
             dmg_path: "/DeveloperDiskImages/".to_string(),
-            allowed_ip: "127.0".to_string(),
+            altserver_path: "echo No alt server specified".to_string(),
+            allowed_ips: vec!["127.0".to_string()],
         }
     }
 }

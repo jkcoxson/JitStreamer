@@ -12,7 +12,7 @@ use crate::config::Config;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Backend {
     deserialized_clients: Vec<DeserializedClient>,
-    pub allowed_ip: String,
+    pub allowed_ips: Vec<String>,
     database_path: String,
     plist_storage: String,
     pub dmg_path: String,
@@ -27,7 +27,7 @@ impl Backend {
                 println!("Failed to open database file, using an empty database");
                 return Backend {
                     deserialized_clients: vec![],
-                    allowed_ip: config.allowed_ip.clone(),
+                    allowed_ips: config.allowed_ips.clone(),
                     database_path: config.database_path.clone(),
                     plist_storage: config.plist_storage.clone(),
                     dmg_path: config.dmg_path.clone(),
@@ -39,7 +39,7 @@ impl Backend {
         let clients: Vec<DeserializedClient> = serde_json::from_str(&contents).unwrap();
         Backend {
             deserialized_clients: clients,
-            allowed_ip: config.allowed_ip.clone(),
+            allowed_ips: config.allowed_ips.clone(),
             database_path: config.database_path.clone(),
             plist_storage: config.plist_storage.clone(),
             dmg_path: config.dmg_path.clone(),
@@ -51,6 +51,15 @@ impl Backend {
         let contents = serde_json::to_string_pretty(&self.deserialized_clients).unwrap();
         let mut file = std::fs::File::create(&self.database_path).unwrap();
         std::io::Write::write_all(&mut file, contents.as_bytes()).unwrap();
+    }
+
+    pub fn check_ip(&self, ip: &str) -> bool {
+        for allowed_ip in &self.allowed_ips {
+            if ip.starts_with(allowed_ip) {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn register_client(&mut self, ip: String, udid: String) -> Result<(), ()> {

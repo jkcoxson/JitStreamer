@@ -193,7 +193,7 @@ async fn status(
     if let None = addr {
         return Ok(packets::status_packet(false, false));
     }
-    if !addr.unwrap().to_string().starts_with(&backend.allowed_ip) {
+    if !backend.check_ip(&addr.unwrap().to_string()) {
         return Ok(packets::status_packet(false, false));
     }
     match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
@@ -216,7 +216,7 @@ async fn list_apps(
             vec![],
         ));
     }
-    if !addr.unwrap().to_string().starts_with(&backend.allowed_ip) {
+    if !backend.check_ip(&addr.unwrap().to_string()) {
         debug!("Address not allowed");
         return Ok(packets::list_apps_response(
             false,
@@ -293,11 +293,12 @@ async fn shortcuts_run(
         debug!("No address provided");
         return Ok(packets::launch_response(false, "Unable to get IP address"));
     }
-    if !addr.unwrap().to_string().starts_with(&backend.allowed_ip) {
+    if !backend.check_ip(&addr.unwrap().to_string()) {
         debug!("Address not allowed");
-        return Ok(packets::launch_response(
+        return Ok(packets::list_apps_response(
             false,
             "Address not allowed, connect to the VLAN",
+            vec![],
         ));
     }
     let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
