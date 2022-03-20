@@ -23,6 +23,7 @@ mod packets;
 async fn main() {
     println!("Starting JitStreamer...");
     let config = config::Config::load();
+    let static_dir = config.static_path.clone();
     let current_dir = std::env::current_dir().expect("failed to read current directory");
     let backend = Arc::new(Mutex::new(backend::Backend::load(&config)));
     let upload_backend = backend.clone();
@@ -67,7 +68,7 @@ async fn main() {
         .and_then(move |query, addr| shortcuts_run(query, addr, shortcuts_launch_backend.clone()));
 
     let routes = root_redirect()
-        .or(warp::fs::dir(current_dir.join("../JitStreamerSite/dist")))
+        .or(warp::fs::dir(current_dir.join(static_dir)))
         .or(upload_route)
         .or(status_route)
         .or(list_apps_route)
