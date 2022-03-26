@@ -11,8 +11,6 @@ use rusty_libimobiledevice::{
 
 use crate::backend::DeserializedClient;
 
-const SERVICE_NAME: &str = "12:34:56:78:90:AB@fe80::de52:85ff:fece:c422._apple-mobdev2._tcp";
-
 pub struct Client {
     pub ip: String,
     pub udid: String,

@@ -1,7 +1,5 @@
 // jkcoxson
 
-const SERVICE_NAME: &str = "12:34:56:78:90:AB@fe80::de52:85ff:fece:c422._apple-mobdev2._tcp";
-
 use rusty_libimobiledevice::debug;
 use rusty_libimobiledevice::libimobiledevice::Device;
 use serde::{Deserialize, Serialize};
@@ -101,6 +99,7 @@ impl Backend {
                 if &self.deserialized_clients[i].ip == &ip {
                     self.deserialized_clients.remove(i);
                 }
+                i = i + 1;
             }
             self.save();
             return Ok(())

@@ -81,6 +81,7 @@ async fn main() {
         .or(list_apps_route)
         .or(shortcuts_launch_route)
         .or(version_route)
+        .or(unregister_route)
         .or(admin_route);
 
     let addr: std::net::SocketAddr = format!("{}:{}", config.host, config.port)
