@@ -3,7 +3,10 @@
 const SERVICE_NAME: &str = "12:34:56:78:90:AB@fe80::de52:85ff:fece:c422._apple-mobdev2._tcp";
 
 use rusty_libimobiledevice::debug;
+use rusty_libimobiledevice::libimobiledevice::Device;
 use serde::{Deserialize, Serialize};
+use std::net::IpAddr;
+use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::client::Client;
@@ -122,44 +125,23 @@ impl Backend {
     }
 
     pub async fn test_new_client(ip: &String, udid: &String) -> Result<(), ()> {
-        let udids = match rusty_libimobiledevice::libimobiledevice::get_udid_list() {
-            Ok(udids) => udids,
-            Err(_) => {
-                debug!("Error getting udid list");
+        // Determine if device is in the muxer
+        let ip = match IpAddr::from_str(ip) {
+            Ok(ip) => ip,
+            Err(e) => {
+                debug!("Error parsing ip: {}", e);
                 return Err(());
             }
         };
-        if udids.contains(udid) {
-            return Ok(());
-        }
-        // Register with usbmuxd
-        let mut stream = match tokio::net::TcpStream::connect("127.0.0.1:32498").await {
-            Ok(stream) => stream,
-            Err(_) => {
+        let to_test = Device::new(udid.to_string(), true, Some(ip), 0).unwrap();
+        // Start lockdownd
+        let _ = match to_test.new_lockdownd_client("test".to_string()) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                debug!("Error creating lockdownd client: {:?}", e);
                 return Err(());
             }
         };
-        // Send the register packet
-        match tokio::io::AsyncWriteExt::write_all(
-            &mut stream,
-            format!("1\n{}\n{}\n{}\n", udid, SERVICE_NAME, ip).as_bytes(),
-        )
-        .await
-        {
-            _ => (),
-        };
-        for _ in 1..20 {
-            // Wait for a few seconds for it to register
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            let udids = match rusty_libimobiledevice::libimobiledevice::get_udid_list() {
-                Ok(udids) => udids,
-                Err(_) => return Err(()),
-            };
-            if udids.contains(udid) {
-                return Ok(());
-            }
-        }
-        Err(())
     }
 }
 

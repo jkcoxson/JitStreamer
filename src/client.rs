@@ -1,12 +1,13 @@
 // jkcoxson
 
+use std::{net::IpAddr, str::FromStr};
+
 use rusty_libimobiledevice::{
     debug,
     instproxy::InstProxyClient,
-    libimobiledevice::{get_device, get_udid_list, Device},
+    libimobiledevice::Device,
     plist::{Plist, PlistDictIter},
 };
-use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 use crate::backend::DeserializedClient;
 
@@ -23,90 +24,20 @@ impl Client {
         Client { ip, udid }
     }
 
-    pub async fn connect(&self) -> Result<Device, ()> {
+    pub fn connect(&self) -> Result<Device, ()> {
         // Determine if device is in the muxer
-        for _ in 0..20 {
-            // Get the UDID list
-            match get_udid_list() {
-                Ok(udids) => {
-                    // If the device is in the UDID list, connect to it
-                    if udids.contains(&self.udid) {
-                        return Ok(match get_device(self.udid.clone()) {
-                            Ok(device) => device,
-                            Err(_) => {
-                                return Err(());
-                            }
-                        });
-                    } else {
-                        // Send a request to usbmuxd2 to connect to it
-                        let mut stream = match TcpStream::connect("127.0.0.1:32498").await {
-                            Ok(stream) => stream,
-                            Err(_) => {
-                                return Err(());
-                            }
-                        };
-                        // Send the register packet
-                        match stream
-                            .write_all(
-                                format!("1\n{}\n{}\n{}\n", self.udid, SERVICE_NAME, self.ip)
-                                    .as_bytes(),
-                            )
-                            .await
-                        {
-                            _ => (),
-                        };
-                        // Wait for half a second for it to register
-                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    }
-                }
-                Err(_) => {
-                    return Err(());
-                }
-            }
-        }
-        Err(())
-    }
-
-    pub async fn disconnect(&self) -> Result<(), ()> {
-        debug!("Disconnecting from {}", &self.udid);
-        // Determine if device is in the muxer
-        match get_udid_list() {
-            Ok(udids) => {
-                // If the device is in the UDID list, send the disconnect packet
-                if udids.contains(&self.udid) {
-                    let mut stream = match TcpStream::connect("127.0.0.1:32498").await {
-                        Ok(stream) => stream,
-                        Err(_) => {
-                            debug!("Failed to connect to usbmuxd2");
-                            return Err(());
-                        }
-                    };
-                    // Send the unregister packet
-                    debug!("Sending unregister packet");
-                    match stream
-                        .write_all(
-                            format!("0\n{}\n{}\n{}\n", self.udid, SERVICE_NAME, "0.0.0.0")
-                                .as_bytes(),
-                        )
-                        .await
-                    {
-                        _ => (),
-                    };
-                    return Ok(());
-                } else {
-                    debug!("Did not contain the UDID, returning");
-                    return Ok(());
-                }
-            }
-            Err(_) => {
-                debug!("Failed to get UDID list");
+        let ip = match IpAddr::from_str(&self.ip) {
+            Ok(ip) => ip,
+            Err(e) => {
+                debug!("Error parsing ip: {}", e);
                 return Err(());
             }
-        }
+        };
+        Ok(Device::new(self.udid.clone(), true, Some(ip), 0).unwrap())
     }
 
     pub async fn get_apps(&self) -> Result<Vec<String>, String> {
-        let device = match self.connect().await {
+        let device = match self.connect() {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -155,7 +86,7 @@ impl Client {
     }
 
     pub async fn debug_app(&self, app: String) -> Result<(), String> {
-        let device = match self.connect().await {
+        let device = match self.connect() {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -288,7 +219,7 @@ impl Client {
     }
 
     pub async fn get_ios_version(&self) -> Result<String, String> {
-        let device = match self.connect().await {
+        let device = match self.connect() {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -434,7 +365,7 @@ impl Client {
     }
 
     pub async fn upload_dev_dmg(&self) -> Result<(), String> {
-        let device = match self.connect().await {
+        let device = match self.connect() {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());

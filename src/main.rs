@@ -239,9 +239,6 @@ async fn list_apps(
     let v = match client.get_apps().await {
         Ok(v) => v,
         Err(e) => {
-            match client.disconnect().await {
-                _ => {}
-            }
             debug!("Unable to get apps");
             return Ok(packets::list_apps_response(
                 false,
@@ -315,16 +312,9 @@ async fn shortcuts_run(
 
     match client.debug_app(app.clone()).await {
         Ok(_) => {
-            match client.disconnect().await {
-                _ => {}
-            }
             return Ok(packets::launch_response(true, ""));
         }
         Err(e) => {
-            match client.disconnect().await {
-                _ => {}
-            }
-            debug!("Unable to run app");
             return Ok(packets::launch_response(false, &e));
         }
     };
