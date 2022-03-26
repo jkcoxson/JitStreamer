@@ -16,6 +16,13 @@ pub fn upload_response(success: bool, message: &str) -> String {
     serde_json::to_string(&packet).unwrap()
 }
 
+pub fn unregister_response(success: bool, message: &str) -> String {
+    let mut packet: serde_json::Value = serde_json::Value::Object(serde_json::Map::new());
+    packet["success"] = serde_json::Value::Bool(success);
+    packet["message"] = serde_json::Value::String(message.to_string());
+    serde_json::to_string(&packet).unwrap()
+}
+
 pub fn list_apps_response(success: bool, message: &str, list: Vec<String>) -> String {
     let mut packet: serde_json::Value = serde_json::Value::Object(serde_json::Map::new());
     let mut apps: serde_json::Value = serde_json::Value::Object(serde_json::Map::new());

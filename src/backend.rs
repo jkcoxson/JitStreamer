@@ -88,6 +88,27 @@ impl Backend {
         Ok(())
     }
 
+    pub fn unregister_client(&mut self, ip: String) -> Result<(), ()> {
+        if let Some(client) = self.get_by_ip(&ip) {
+            // Delete pairing file
+            match std::fs::remove_file(format!("/var/lib/lockdown/{}.plist", client.udid)) {
+                _ => {}
+            }
+
+            // Remove from database
+            let mut i = 0;
+            while i < self.deserialized_clients.len() {
+                if &self.deserialized_clients[i].ip == &ip {
+                    self.deserialized_clients.remove(i);
+                }
+            }
+            self.save();
+            return Ok(())
+        } else {
+            return Err(())
+        }
+    }
+
     pub fn get_by_ip(&mut self, ip: &str) -> Option<Client> {
         let res = self
             .deserialized_clients

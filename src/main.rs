@@ -30,6 +30,7 @@ async fn main() {
     let status_backend = backend.clone();
     let list_apps_backend = backend.clone();
     let shortcuts_launch_backend = backend.clone();
+    let shortcuts_unregister_backend = backend.clone();
 
     // Upload route
     let upload_route = warp::path("upload")
@@ -67,6 +68,12 @@ async fn main() {
         .and(warp::filters::addr::remote())
         .and_then(move |query, addr| shortcuts_run(query, addr, shortcuts_launch_backend.clone()));
 
+    let unregister_route = warp::path!("shortcuts" / "unregister")
+        .and(warp::post())
+        .and(warp::filters::addr::remote())
+        .and_then(move | addr | shortcuts_unregister(addr, shortcuts_unregister_backend.clone()));
+
+    // Assemble routes for service
     let routes = root_redirect()
         .or(warp::fs::dir(current_dir.join(static_dir)))
         .or(upload_route)
@@ -319,4 +326,25 @@ async fn shortcuts_run(
             return Ok(packets::launch_response(false, &e));
         }
     };
+}
+
+async fn shortcuts_unregister(addr: Option<SocketAddr>, backend: Arc<Mutex<Backend>>) -> Result<impl Reply, Rejection> {
+    debug!("Device has sent request unregister");
+    let mut backend = backend.lock().await;
+    if let None = addr {
+        debug!("No address provided");
+        return Ok(packets::launch_response(false, "Unable to get IP address"));
+    }
+    if !backend.check_ip(&addr.unwrap().to_string()) {
+        debug!("Address not allowed");
+        return Ok(packets::list_apps_response(
+            false,
+            "Address not allowed, connect to the VLAN",
+            vec![],
+        ));
+    }
+    match backend.unregister_client(addr.unwrap().ip().to_string()) {
+        Ok(_) => return Ok(packets::unregister_response(true, "")),
+        Err(_) => return Ok(packets::unregister_response(false, "Device not found in database"))
+    }
 }
