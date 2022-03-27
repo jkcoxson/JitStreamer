@@ -102,9 +102,9 @@ impl Backend {
                 i = i + 1;
             }
             self.save();
-            return Ok(())
+            return Ok(());
         } else {
-            return Err(())
+            return Err(());
         }
     }
 
@@ -114,7 +114,7 @@ impl Backend {
             .iter()
             .find(|client| client.ip == ip);
         match res {
-            Some(c) => Some(c.into()),
+            Some(c) => Some(c.to_client(&format!("{}/{}.plist", self.plist_storage, c.udid))),
             None => None,
         }
     }
@@ -122,7 +122,7 @@ impl Backend {
     pub fn get_by_udid(&self, udid: &str) -> Option<Client> {
         let res = self.deserialized_clients.iter().find(|c| c.udid == udid);
         match res {
-            Some(c) => Some(c.into()),
+            Some(c) => Some(c.to_client(&format!("{}/{}.plist", self.plist_storage, c.udid))),
             None => None,
         }
     }
@@ -176,6 +176,16 @@ pub struct DeserializedClient {
     pub apps: Vec<App>,
     /// If the device hasn't been seen in 28 days, it will be removed.
     pub last_seen: u64,
+}
+
+impl DeserializedClient {
+    pub fn to_client(&self, plist_path: &String) -> Client {
+        Client {
+            ip: self.ip.clone(),
+            udid: self.udid.clone(),
+            pairing_file: plist_path.to_string(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

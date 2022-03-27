@@ -9,33 +9,62 @@ use rusty_libimobiledevice::{
     plist::{Plist, PlistDictIter},
 };
 
-use crate::backend::DeserializedClient;
-
 pub struct Client {
     pub ip: String,
     pub udid: String,
+    pub pairing_file: String,
 }
 
 impl Client {
     #[allow(dead_code)]
-    pub fn new(ip: String, udid: String) -> Client {
-        Client { ip, udid }
+    pub fn new(ip: String, udid: String, pairing_file: String) -> Client {
+        Client {
+            ip,
+            udid,
+            pairing_file,
+        }
     }
 
-    pub fn connect(&self) -> Result<Device, ()> {
+    /// Connects to a given device and runs preflight operations.
+    pub async fn connect(&self) -> Result<Device, String> {
         // Determine if device is in the muxer
         let ip = match IpAddr::from_str(&self.ip) {
             Ok(ip) => ip,
             Err(e) => {
                 debug!("Error parsing ip: {}", e);
-                return Err(());
+                return Err("Unable to parse ip".to_string());
             }
         };
-        Ok(Device::new(self.udid.clone(), true, Some(ip), 0).unwrap())
+        let device = Device::new(self.udid.clone(), true, Some(ip), 0).unwrap();
+        debug!("Starting heartbeat {}", self.udid);
+
+        let heartbeat = match device.new_heartbeat_client("JitStreamer".to_string()) {
+            Ok(heartbeat) => heartbeat,
+            Err(e) => {
+                debug!("Error creating heartbeat: {:?}", e);
+                return Err("Unable to create heartbeat".to_string());
+            }
+        };
+        tokio::task::spawn_blocking(move || {
+            debug!("Starting heartbeat loop");
+            loop {
+                match heartbeat.receive_with_timeout(5000) {
+                    Ok(plist) => {
+                        debug!("Received heartbeat: {:?}", plist);
+                    }
+                    Err(e) => {
+                        debug!("Error receiving heartbeat: {:?}", e);
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(device)
     }
 
     pub async fn get_apps(&self) -> Result<Vec<String>, String> {
-        let device = match self.connect() {
+        let device = match self.connect().await {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -84,7 +113,7 @@ impl Client {
     }
 
     pub async fn debug_app(&self, app: String) -> Result<(), String> {
-        let device = match self.connect() {
+        let device = match self.connect().await {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -217,7 +246,7 @@ impl Client {
     }
 
     pub async fn get_ios_version(&self) -> Result<String, String> {
-        let device = match self.connect() {
+        let device = match self.connect().await {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -363,7 +392,7 @@ impl Client {
     }
 
     pub async fn upload_dev_dmg(&self) -> Result<(), String> {
-        let device = match self.connect() {
+        let device = match self.connect().await {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -437,14 +466,5 @@ impl Client {
             }
         }
         Ok(())
-    }
-}
-
-impl From<&DeserializedClient> for Client {
-    fn from(client: &DeserializedClient) -> Self {
-        Client {
-            ip: client.ip.clone(),
-            udid: client.udid.clone(),
-        }
     }
 }
