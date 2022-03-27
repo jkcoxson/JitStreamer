@@ -71,7 +71,7 @@ async fn main() {
     let unregister_route = warp::path!("shortcuts" / "unregister")
         .and(warp::post())
         .and(warp::filters::addr::remote())
-        .and_then(move | addr | shortcuts_unregister(addr, shortcuts_unregister_backend.clone()));
+        .and_then(move |addr| shortcuts_unregister(addr, shortcuts_unregister_backend.clone()));
 
     // Assemble routes for service
     let routes = root_redirect()
@@ -148,7 +148,15 @@ async fn upload_file(
             // Attempt to parse it as an Apple Plist
             let plist: Plist = Plist::from_xml(value.clone()).unwrap();
             let udid = match plist.dict_get_item("UDID") {
-                Ok(s) => s.get_string_val().unwrap(),
+                Ok(s) => match s.get_string_val() {
+                    Ok(s) => s,
+                    Err(_) => {
+                        return Ok(packets::upload_response(
+                            false,
+                            "Unable to read UDID from Plist",
+                        ));
+                    }
+                },
                 _ => {
                     return Ok(packets::upload_response(false, "Invalid pairing file!"));
                 }
@@ -329,7 +337,10 @@ async fn shortcuts_run(
     };
 }
 
-async fn shortcuts_unregister(addr: Option<SocketAddr>, backend: Arc<Mutex<Backend>>) -> Result<impl Reply, Rejection> {
+async fn shortcuts_unregister(
+    addr: Option<SocketAddr>,
+    backend: Arc<Mutex<Backend>>,
+) -> Result<impl Reply, Rejection> {
     debug!("Device has sent request unregister");
     let mut backend = backend.lock().await;
     if let None = addr {
@@ -346,6 +357,11 @@ async fn shortcuts_unregister(addr: Option<SocketAddr>, backend: Arc<Mutex<Backe
     }
     match backend.unregister_client(addr.unwrap().ip().to_string()) {
         Ok(_) => return Ok(packets::unregister_response(true, "")),
-        Err(_) => return Ok(packets::unregister_response(false, "Device not found in database"))
+        Err(_) => {
+            return Ok(packets::unregister_response(
+                false,
+                "Device not found in database",
+            ))
+        }
     }
 }
