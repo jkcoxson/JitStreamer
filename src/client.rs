@@ -48,7 +48,7 @@ impl Client {
         tokio::task::spawn_blocking(move || {
             debug!("Starting heartbeat loop");
             loop {
-                match heartbeat.receive_with_timeout(10000) {
+                match heartbeat.receive_with_timeout(15000) {
                     Ok(plist) => {
                         debug!("Received heartbeat: {:?}", plist);
                         // let mut response = Plist::new_dict();
