@@ -361,7 +361,7 @@ impl Client {
             }
         };
         // Create tmp path
-        let tmp_path = format!("{}/dmg/tmp", &self.dmg_path);
+        let tmp_path = format!("{}/tmp", &self.dmg_path);
         debug!("tmp path {}", tmp_path);
         std::fs::create_dir_all(&tmp_path).unwrap();
         // Unzip zip
@@ -390,11 +390,11 @@ impl Client {
         }
         // Move DMG to JIT Shipper directory
         let ios_dmg = dmg_path.join("DeveloperDiskImage.dmg");
-        std::fs::rename(ios_dmg, format!("{}/dmg/{}.dmg", &self.dmg_path, ios_version)).unwrap();
+        std::fs::rename(ios_dmg, format!("{}/{}.dmg", &self.dmg_path, ios_version)).unwrap();
         let ios_sig = dmg_path.join("DeveloperDiskImage.dmg.signature");
         std::fs::rename(
             ios_sig,
-            format!("{}/dmg/{}.dmg.signature", &self.dmg_path, ios_version),
+            format!("{}/{}.dmg.signature", &self.dmg_path, ios_version),
         )
         .unwrap();
 
@@ -406,7 +406,7 @@ impl Client {
         );
 
         // Return DMG path
-        Ok(format!("{}/dmg/{}.dmg", &self.dmg_path, ios_version))
+        Ok(format!("{}/{}.dmg", &self.dmg_path, ios_version))
     }
 
     pub async fn upload_dev_dmg(&self) -> Result<(), String> {
