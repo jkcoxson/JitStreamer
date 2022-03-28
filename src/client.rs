@@ -48,9 +48,24 @@ impl Client {
         tokio::task::spawn_blocking(move || {
             debug!("Starting heartbeat loop");
             loop {
-                match heartbeat.receive_with_timeout(5000) {
+                match heartbeat.receive_with_timeout(10000) {
                     Ok(plist) => {
                         debug!("Received heartbeat: {:?}", plist);
+                        // let mut response = Plist::new_dict();
+                        // match response.dict_set_item("Command", "Polo".into()) {
+                        //     Ok(_) => {}
+                        //     Err(e) => {
+                        //         debug!("Error setting response: {:?}", e);
+                        //         return;
+                        //     }
+                        // }
+                        match heartbeat.send(plist) {
+                            Ok(_) => {}
+                            Err(e) => {
+                                debug!("Error sending response: {:?}", e);
+                                return;
+                            }
+                        }
                     }
                     Err(e) => {
                         debug!("Error receiving heartbeat: {:?}", e);
@@ -181,7 +196,15 @@ impl Client {
             let ds = match device.new_debug_server("jitstreamer") {
                 Ok(d) => Some(d),
                 Err(_) => {
-                    self.upload_dev_dmg().await?;
+                    match self.upload_dev_dmg().await {
+                        Ok(_) => {
+                            debug!("Successfully uploaded dev.dmg");
+                        }
+                        Err(e) => {
+                            debug!("Error uploading dev.dmg: {:?}", e);
+                            return Err(format!("Unable to upload dev.dmg: {:?}", e));
+                        }
+                    };
                     None
                 }
             };
