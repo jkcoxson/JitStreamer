@@ -306,17 +306,8 @@ impl Client {
     pub async fn get_dmg_path(&self) -> Result<String, String> {
         let ios_version = self.get_ios_version().await?;
 
-        // // Get current directory
-        // let current_dir = match std::env::current_dir() {
-        //     Ok(dir) => dir.canonicalize().unwrap().to_string_lossy().to_string(),
-        //     Err(_) => {
-        //         return Err("Unable to get current directory".to_string());
-        //     }
-        // };
-
         // Check if directory exists
-        let path = std::path::Path::new(&self.dmg_path).join("dmg").join(format!("{}.dmg", &ios_version));
-        // let path = format!("{}dmg/{}.dmg", &self.dmg_path, &ios_version);
+        let path = std::path::Path::new(&self.dmg_path).join(format!("{}.dmg", &ios_version));
         debug!("Checking if {} exists", path.display());
         if path.exists() {
             return Ok(String::from(path.to_string_lossy()));
