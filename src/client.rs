@@ -390,6 +390,9 @@ impl Client {
         for entry in std::fs::read_dir(&tmp_path).unwrap() {
             let entry = entry.unwrap();
             if entry.path().is_dir() {
+                if entry.path().to_str().unwrap().contains("__MACOSX") {
+                    continue;
+                }
                 dmg_path = entry.path();
             }
         }
