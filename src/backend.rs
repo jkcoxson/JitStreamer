@@ -114,7 +114,7 @@ impl Backend {
             .iter()
             .find(|client| client.ip == ip);
         match res {
-            Some(c) => Some(c.to_client(&format!("{}/{}.plist", self.plist_storage, c.udid))),
+            Some(c) => Some(c.to_client(&format!("{}/{}.plist", self.plist_storage, c.udid), &self.dmg_path)),
             None => None,
         }
     }
@@ -122,7 +122,7 @@ impl Backend {
     pub fn get_by_udid(&self, udid: &str) -> Option<Client> {
         let res = self.deserialized_clients.iter().find(|c| c.udid == udid);
         match res {
-            Some(c) => Some(c.to_client(&format!("{}/{}.plist", self.plist_storage, c.udid))),
+            Some(c) => Some(c.to_client(&format!("{}/{}.plist", self.plist_storage, c.udid), &self.dmg_path)),
             None => None,
         }
     }
@@ -179,11 +179,12 @@ pub struct DeserializedClient {
 }
 
 impl DeserializedClient {
-    pub fn to_client(&self, plist_path: &String) -> Client {
+    pub fn to_client(&self, plist_path: &String, dmg_path: &String) -> Client {
         Client {
             ip: self.ip.clone(),
             udid: self.udid.clone(),
             pairing_file: plist_path.to_string(),
+            dmg_path: dmg_path.to_string(),
         }
     }
 }

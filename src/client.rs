@@ -13,15 +13,17 @@ pub struct Client {
     pub ip: String,
     pub udid: String,
     pub pairing_file: String,
+    pub dmg_path: String,
 }
 
 impl Client {
     #[allow(dead_code)]
-    pub fn new(ip: String, udid: String, pairing_file: String) -> Client {
+    pub fn new(ip: String, udid: String, pairing_file: String, dmg_path: String) -> Client {
         Client {
             ip,
             udid,
             pairing_file,
+            dmg_path,
         }
     }
 
@@ -304,18 +306,11 @@ impl Client {
     pub async fn get_dmg_path(&self) -> Result<String, String> {
         let ios_version = self.get_ios_version().await?;
 
-        // Get current directory
-        let current_dir = match std::env::current_dir() {
-            Ok(dir) => dir.canonicalize().unwrap().to_string_lossy().to_string(),
-            Err(_) => {
-                return Err("Unable to get current directory".to_string());
-            }
-        };
-
         // Check if directory exists
-        let path = format!("{}/dmg/{}.dmg", &current_dir, &ios_version);
-        if std::path::Path::new(&path).exists() {
-            return Ok(path);
+        let path = std::path::Path::new(&self.dmg_path).join(format!("{}.dmg", &ios_version));
+        debug!("Checking if {} exists", path.display());
+        if path.exists() {
+            return Ok(String::from(path.to_string_lossy()));
         }
         // Download versions.json from GitHub
         debug!("Downloading iOS dictionary...");
@@ -366,7 +361,7 @@ impl Client {
             }
         };
         // Create tmp path
-        let tmp_path = format!("{}/dmg/tmp", &current_dir);
+        let tmp_path = format!("{}/tmp", &self.dmg_path);
         debug!("tmp path {}", tmp_path);
         std::fs::create_dir_all(&tmp_path).unwrap();
         // Unzip zip
@@ -398,11 +393,11 @@ impl Client {
         }
         // Move DMG to JIT Shipper directory
         let ios_dmg = dmg_path.join("DeveloperDiskImage.dmg");
-        std::fs::rename(ios_dmg, format!("{}/dmg/{}.dmg", &current_dir, ios_version)).unwrap();
+        std::fs::rename(ios_dmg, format!("{}/{}.dmg", &self.dmg_path, ios_version)).unwrap();
         let ios_sig = dmg_path.join("DeveloperDiskImage.dmg.signature");
         std::fs::rename(
             ios_sig,
-            format!("{}/dmg/{}.dmg.signature", &current_dir, ios_version),
+            format!("{}/{}.dmg.signature", &self.dmg_path, ios_version),
         )
         .unwrap();
 
@@ -414,7 +409,7 @@ impl Client {
         );
 
         // Return DMG path
-        Ok(format!("{}/dmg/{}.dmg", &current_dir, ios_version))
+        Ok(format!("{}/{}.dmg", &self.dmg_path, ios_version))
     }
 
     pub async fn upload_dev_dmg(&self) -> Result<(), String> {
@@ -465,6 +460,8 @@ impl Client {
             }
         };
 
+        debug!("Uploading DMG from: {}", dmg_path);
+        debug!("signature: {}", format!("{}.signature", dmg_path.clone()).to_string());
         match mim.upload_image(
             dmg_path.clone(),
             "Developer".to_string(),
