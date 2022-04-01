@@ -1,7 +1,7 @@
 // jkcoxson
 
 use rusty_libimobiledevice::debug;
-use rusty_libimobiledevice::libimobiledevice::Device;
+use rusty_libimobiledevice::idevice::Device;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::str::FromStr;
