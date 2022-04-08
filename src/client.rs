@@ -4,7 +4,7 @@ use std::{net::IpAddr, str::FromStr};
 
 use rusty_libimobiledevice::{
     debug,
-    instproxy::InstProxyClient,
+    services::instproxy::InstProxyClient,
     idevice::Device,
     plist::{Plist, PlistDictIter},
 };
