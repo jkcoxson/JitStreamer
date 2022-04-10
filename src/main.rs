@@ -3,7 +3,8 @@
 use backend::Backend;
 use bytes::BufMut;
 use futures::TryStreamExt;
-use rusty_libimobiledevice::{debug, plist::Plist};
+use rusty_libimobiledevice::{debug};
+use plist_plus::Plist;
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
 use warp::{

@@ -6,8 +6,9 @@ use rusty_libimobiledevice::{
     debug,
     services::instproxy::InstProxyClient,
     idevice::Device,
-    plist::{Plist, PlistDictIter},
 };
+
+use plist_plus::Plist;
 
 pub struct Client {
     pub ip: String,
@@ -116,14 +117,19 @@ impl Client {
             }
         };
 
-        let mut p_iter = PlistDictIter::from(lookup_results);
+        let p_iter = lookup_results.into_iter();
         let mut apps = Vec::new();
-        loop {
-            let app = match p_iter.next_item() {
-                Some(app) => app,
-                None => break,
-            };
-            apps.push(app.0);
+        // loop {
+        //     let app = match p_iter.next() {
+        //         Some(app) => app,
+        //         None => break,
+        //     };
+        //     //apps.push(app.0);
+        // }
+
+        for i in p_iter {
+            todo!();
+            //apps.push(i.0);
         }
 
         Ok(apps)
