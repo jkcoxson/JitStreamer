@@ -114,7 +114,10 @@ impl Backend {
             .iter()
             .find(|client| client.ip == ip);
         match res {
-            Some(c) => Some(c.to_client(&format!("{}/{}.plist", self.plist_storage, c.udid), &self.dmg_path)),
+            Some(c) => Some(c.to_client(
+                &format!("{}/{}.plist", self.plist_storage, c.udid),
+                &self.dmg_path,
+            )),
             None => None,
         }
     }
@@ -122,7 +125,10 @@ impl Backend {
     pub fn get_by_udid(&self, udid: &str) -> Option<Client> {
         let res = self.deserialized_clients.iter().find(|c| c.udid == udid);
         match res {
-            Some(c) => Some(c.to_client(&format!("{}/{}.plist", self.plist_storage, c.udid), &self.dmg_path)),
+            Some(c) => Some(c.to_client(
+                &format!("{}/{}.plist", self.plist_storage, c.udid),
+                &self.dmg_path,
+            )),
             None => None,
         }
     }

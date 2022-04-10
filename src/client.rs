@@ -306,31 +306,46 @@ impl Client {
         if path.exists() {
             return Ok(String::from(path.to_string_lossy()));
         }
-        // Download versions.json from GitHub
-        debug!("Downloading iOS dictionary...");
-        let url = "https://raw.githubusercontent.com/jkcoxson/jit_shipper/master/versions.json";
-        let response = match reqwest::get(url).await {
-            Ok(response) => response,
-            Err(_) => {
-                return Err("Error downloading versions.json".to_string());
+
+        let mut ios_dmg_url = None;
+        let dmg_libraries = [
+            "https://raw.githubusercontent.com/jkcoxson/JitStreamer/master/versions.json",
+            "https://cdn.altstore.io/file/altstore/altserver/developerdisks.json",
+        ];
+        for lib in dmg_libraries {
+            if ios_dmg_url != None {
+                break;
             }
-        };
-        let contents = match response.text().await {
-            Ok(contents) => contents,
-            Err(_) => {
-                return Err("Error reading versions.json".to_string());
-            }
-        };
-        // Parse versions.json
-        let versions: serde_json::Value = serde_json::from_str(&contents).unwrap();
-        // Get DMG url
-        let ios_dmg_url = match versions.get(ios_version.clone()) {
-            Some(x) => x.as_str().unwrap().to_string(),
-            None => return Err("DMG library does not contain your iOS version".to_string()),
-        };
+            // Download versions.json from GitHub
+            debug!("Downloading iOS dictionary...");
+            let response = match reqwest::get(lib).await {
+                Ok(response) => response,
+                Err(_) => {
+                    return Err("Error downloading versions.json".to_string());
+                }
+            };
+            let contents = match response.text().await {
+                Ok(contents) => contents,
+                Err(_) => {
+                    return Err("Error reading versions.json".to_string());
+                }
+            };
+            // Parse versions.json
+            let versions: serde_json::Value = serde_json::from_str(&contents).unwrap();
+            // Get DMG url
+            ios_dmg_url = match versions.get(ios_version.clone()) {
+                Some(x) => Some(x.as_str().unwrap().to_string()),
+                None => None,
+            };
+        }
+
+        if ios_dmg_url == None {
+            return Err("Libraries did not contain iOS DMG".to_string());
+        }
+
         // Download DMG zip
         debug!("Downloading iOS {} DMG...", ios_version.clone());
-        let resp = match reqwest::get(ios_dmg_url).await {
+        let resp = match reqwest::get(ios_dmg_url.unwrap()).await {
             Ok(resp) => resp,
             Err(_) => {
                 return Err("Error downloading DMG".to_string());
