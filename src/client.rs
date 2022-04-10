@@ -2,11 +2,7 @@
 
 use std::{net::IpAddr, str::FromStr};
 
-use rusty_libimobiledevice::{
-    debug,
-    services::instproxy::InstProxyClient,
-    idevice::Device,
-};
+use rusty_libimobiledevice::{debug, idevice::Device, services::instproxy::InstProxyClient};
 
 use plist_plus::Plist;
 
@@ -119,17 +115,9 @@ impl Client {
 
         let p_iter = lookup_results.into_iter();
         let mut apps = Vec::new();
-        // loop {
-        //     let app = match p_iter.next() {
-        //         Some(app) => app,
-        //         None => break,
-        //     };
-        //     //apps.push(app.0);
-        // }
 
         for i in p_iter {
-            todo!();
-            //apps.push(i.0);
+            apps.push(i.key.unwrap());
         }
 
         Ok(apps)
@@ -467,7 +455,10 @@ impl Client {
         };
 
         debug!("Uploading DMG from: {}", dmg_path);
-        debug!("signature: {}", format!("{}.signature", dmg_path.clone()).to_string());
+        debug!(
+            "signature: {}",
+            format!("{}.signature", dmg_path.clone()).to_string()
+        );
         match mim.upload_image(
             dmg_path.clone(),
             "Developer".to_string(),
