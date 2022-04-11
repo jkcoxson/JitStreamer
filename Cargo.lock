@@ -656,7 +656,7 @@ dependencies = [
  "bytes",
  "dirs",
  "futures",
- "plist_plus",
+ "plist_plus 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest",
  "rusty_libimobiledevice",
  "serde",
@@ -689,9 +689,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libc"
-version = "0.2.119"
+version = "0.2.122"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bf2e165bb3457c8e098ea76f3e3bc9db55f87aa90d52d0e6be741470916aaa4"
+checksum = "ec647867e2bf0772e28c8bcde4f0d19a9216916e890543b5a03ed8ef27b8f259"
 
 [[package]]
 name = "libloading"
@@ -982,6 +982,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "plist_plus"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68110e1841c6953bed636d8ba264491e798e4bb03d108f5f1c01331fbd72dda"
+dependencies = [
+ "bindgen",
+ "cc",
+ "libc",
+ "rand",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1135,7 +1147,7 @@ dependencies = [
  "bindgen",
  "cc",
  "libc",
- "plist_plus",
+ "plist_plus 0.1.0",
  "rand",
 ]
 

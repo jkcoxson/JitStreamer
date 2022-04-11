@@ -13,7 +13,7 @@ bytes = { version = "*" }
 serde = { version = "*", features = [ "derive" ] }
 serde_json = { version = "*" }
 rusty_libimobiledevice = { version = "*", path = "../rusty_libimobiledevice", features = [ "static" ] }
-plist_plus = { version = "*", path = "../plist_plus", features = [ "static" ] }
+plist_plus = { version = "*", features = [ "static" ] }
 dirs = { version = "*" }
 reqwest = { version = "*", features = [ "blocking" ] }
 zip = { version = "*" }
