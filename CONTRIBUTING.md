@@ -1,0 +1,3 @@
+- Follow the [Rust Style Guide](https://github.com/rust-dev-tools/fmt-rfcs/blob/master/guide/guide.md)
+- For large changes, collaborate with us on Discord
+- Don't create dumpster fires
