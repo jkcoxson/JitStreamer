@@ -47,7 +47,7 @@ impl Client {
         tokio::task::spawn_blocking(move || {
             debug!("Starting heartbeat loop");
             loop {
-                match heartbeat.receive_with_timeout(15000) {
+                match heartbeat.receive(15000) {
                     Ok(plist) => {
                         debug!("Received heartbeat: {:?}", plist);
                         // let mut response = Plist::new_dict();
@@ -92,20 +92,15 @@ impl Client {
                 return Err("Unable to start instproxy".to_string());
             }
         };
-        let mut client_opts = InstProxyClient::options_new();
-        InstProxyClient::options_add(
-            &mut client_opts,
+        let client_opts = InstProxyClient::create_return_attributes(
             vec![("ApplicationType".to_string(), Plist::new_string("Any"))],
-        );
-        InstProxyClient::options_set_return_attributes(
-            &mut client_opts,
             vec![
                 "CFBundleIdentifier".to_string(),
                 "CFBundleExecutable".to_string(),
                 "Container".to_string(),
             ],
         );
-        let lookup_results = match instproxy_client.lookup(vec![], client_opts) {
+        let lookup_results = match instproxy_client.lookup(vec![], Some(client_opts)) {
             Ok(apps) => apps,
             Err(e) => {
                 debug!("Error looking up apps: {:?}", e);
@@ -138,21 +133,15 @@ impl Client {
                 return Err("Unable to start instproxy".to_string());
             }
         };
-
-        let mut client_opts = InstProxyClient::options_new();
-        InstProxyClient::options_add(
-            &mut client_opts,
+        let client_opts = InstProxyClient::create_return_attributes(
             vec![("ApplicationType".to_string(), Plist::new_string("Any"))],
-        );
-        InstProxyClient::options_set_return_attributes(
-            &mut client_opts,
             vec![
                 "CFBundleIdentifier".to_string(),
                 "CFBundleExecutable".to_string(),
                 "Container".to_string(),
             ],
         );
-        let lookup_results = match instproxy_client.lookup(vec![app.clone()], client_opts) {
+        let lookup_results = match instproxy_client.lookup(vec![app.clone()], Some(client_opts)) {
             Ok(apps) => apps,
             Err(e) => {
                 debug!("Error looking up apps: {:?}", e);
@@ -443,7 +432,7 @@ impl Client {
             };
 
         let service = match lockdown_client
-            .start_service("com.apple.mobile.mobile_image_mounter".to_string())
+            .start_service("com.apple.mobile.mobile_image_mounter".to_string(), false)
         {
             Ok(service) => {
                 debug!("Successfully started com.apple.mobile.mobile_image_mounter");
