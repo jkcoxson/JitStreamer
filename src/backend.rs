@@ -55,6 +55,9 @@ impl Backend {
     }
 
     pub fn check_ip(&self, ip: &str) -> bool {
+        if self.allowed_ips.len() == 0 {
+            return true;
+        }
         for allowed_ip in &self.allowed_ips {
             if ip.starts_with(allowed_ip) {
                 return true;
