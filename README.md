@@ -30,5 +30,6 @@ You can find support at the [Jit Streamer Discord server](https://imgur.com/rr9x
 }
 ```
 - Set up your own VPN. For speed, I recommend [Wireguard](https://github.com/Nyr/wireguard-install). 
-For getting around firewalls, I recommend [OpenVPN](https://github.com/Nyr/openvpn-install).
+For getting around firewalls, I recommend [OpenVPN](https://github.com/Nyr/openvpn-install). 
+if you can't open a port on your router, I recommend [ZeroTier](https://my.zerotier.com).
 - Run ``sudo ./target/release/jit_streamer``
