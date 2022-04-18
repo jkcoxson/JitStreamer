@@ -1,4 +1,4 @@
-docker build --build-arg IMAGE=arm32v7/alpine:3.15 --output . .
+docker build --build-arg IMAGE=arm32v7/ubuntu:21.10 --output . .
 
 # docker build --build-arg IMAGE=arm64v8/alpine:3.15 .
 

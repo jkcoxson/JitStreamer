@@ -712,7 +712,6 @@ dependencies = [
  "bytes",
  "dirs",
  "futures",
- "openssl-sys",
  "plist_plus",
  "reqwest",
  "rusty_libimobiledevice",
@@ -1244,6 +1243,7 @@ dependencies = [
  "bindgen",
  "cc",
  "libc",
+ "openssl-sys",
  "plist_plus",
 ]
 

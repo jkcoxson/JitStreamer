@@ -17,5 +17,3 @@ plist_plus = { version = "*", path= "../plist_plus", features = [ "static" ] }
 dirs = { version = "*" }
 reqwest = { version = "*", features = [ "blocking" ] }
 zip = { version = "*" }
-
-openssl-sys = { version = "*", features = [ "vendored" ]}
