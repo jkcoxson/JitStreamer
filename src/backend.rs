@@ -1,6 +1,6 @@
 // jkcoxson
 
-use rusty_libimobiledevice::debug;
+use log::warn;
 use rusty_libimobiledevice::idevice::Device;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
@@ -158,7 +158,7 @@ impl Backend {
         let ip = match IpAddr::from_str(ip) {
             Ok(ip) => ip,
             Err(e) => {
-                debug!("Error parsing ip: {}", e);
+                warn!("Error parsing ip: {}", e);
                 return Err(());
             }
         };
@@ -167,7 +167,7 @@ impl Backend {
         let _ = match to_test.new_lockdownd_client("test".to_string()) {
             Ok(_) => return Ok(()),
             Err(e) => {
-                debug!("Error creating lockdownd client: {:?}", e);
+                warn!("Error creating lockdownd client: {:?}", e);
                 return Err(());
             }
         };

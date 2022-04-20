@@ -17,3 +17,5 @@ plist_plus = { version = "*", path= "../plist_plus", features = [ "static", "ven
 dirs = { version = "*" }
 reqwest = { version = "*", features = [ "blocking" ] }
 zip = { version = "*" }
+log = { version = "*" }
+env_logger = { version = "*" }

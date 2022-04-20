@@ -2,7 +2,8 @@
 
 use std::{net::IpAddr, str::FromStr};
 
-use rusty_libimobiledevice::{debug, idevice::Device, services::instproxy::InstProxyClient};
+use log::{info, warn};
+use rusty_libimobiledevice::{idevice::Device, services::instproxy::InstProxyClient};
 
 use plist_plus::Plist;
 
@@ -30,26 +31,26 @@ impl Client {
         let ip = match IpAddr::from_str(&self.ip) {
             Ok(ip) => ip,
             Err(e) => {
-                debug!("Error parsing ip: {}", e);
+                warn!("Error parsing ip: {}", e);
                 return Err("Unable to parse ip".to_string());
             }
         };
         let device = Device::new(self.udid.clone(), true, Some(ip), 0).unwrap();
-        debug!("Starting heartbeat {}", self.udid);
+        info!("Starting heartbeat {}", self.udid);
 
         let heartbeat = match device.new_heartbeat_client("JitStreamer".to_string()) {
             Ok(heartbeat) => heartbeat,
             Err(e) => {
-                debug!("Error creating heartbeat: {:?}", e);
+                warn!("Error creating heartbeat: {:?}", e);
                 return Err("Unable to create heartbeat".to_string());
             }
         };
         tokio::task::spawn_blocking(move || {
-            debug!("Starting heartbeat loop");
+            info!("Starting heartbeat loop");
             loop {
                 match heartbeat.receive(15000) {
                     Ok(plist) => {
-                        debug!("Received heartbeat: {:?}", plist);
+                        info!("Received heartbeat: {:?}", plist);
                         // let mut response = Plist::new_dict();
                         // match response.dict_set_item("Command", "Polo".into()) {
                         //     Ok(_) => {}
@@ -61,13 +62,13 @@ impl Client {
                         match heartbeat.send(plist) {
                             Ok(_) => {}
                             Err(e) => {
-                                debug!("Error sending response: {:?}", e);
+                                warn!("Error sending response: {:?}", e);
                                 return;
                             }
                         }
                     }
                     Err(e) => {
-                        debug!("Error receiving heartbeat: {:?}", e);
+                        warn!("Error receiving heartbeat: {:?}", e);
                         break;
                     }
                 }
@@ -88,7 +89,7 @@ impl Client {
         let instproxy_client = match device.new_instproxy_client("jitstreamer".to_string()) {
             Ok(instproxy) => instproxy,
             Err(e) => {
-                debug!("Error starting instproxy: {:?}", e);
+                warn!("Error starting instproxy: {:?}", e);
                 return Err("Unable to start instproxy".to_string());
             }
         };
@@ -103,7 +104,7 @@ impl Client {
         let lookup_results = match instproxy_client.lookup(vec![], Some(client_opts)) {
             Ok(apps) => apps,
             Err(e) => {
-                debug!("Error looking up apps: {:?}", e);
+                warn!("Error looking up apps: {:?}", e);
                 return Err("Unable to lookup apps".to_string());
             }
         };
@@ -129,7 +130,7 @@ impl Client {
         let instproxy_client = match device.new_instproxy_client("idevicedebug".to_string()) {
             Ok(instproxy) => instproxy,
             Err(e) => {
-                debug!("Error starting instproxy: {:?}", e);
+                warn!("Error starting instproxy: {:?}", e);
                 return Err("Unable to start instproxy".to_string());
             }
         };
@@ -144,7 +145,7 @@ impl Client {
         let lookup_results = match instproxy_client.lookup(vec![app.clone()], Some(client_opts)) {
             Ok(apps) => apps,
             Err(e) => {
-                debug!("Error looking up apps: {:?}", e);
+                warn!("Error looking up apps: {:?}", e);
                 return Err("Unable to lookup apps".to_string());
             }
         };
@@ -153,7 +154,7 @@ impl Client {
         let working_directory = match lookup_results.dict_get_item("Container") {
             Ok(p) => p,
             Err(_) => {
-                debug!("App not found");
+                warn!("App not found");
                 return Err("App not found".to_string());
             }
         };
@@ -161,16 +162,16 @@ impl Client {
         let working_directory = match working_directory.get_string_val() {
             Ok(p) => p,
             Err(_) => {
-                debug!("App not found");
+                warn!("App not found");
                 return Err("App not found".to_string());
             }
         };
-        debug!("Working directory: {}", working_directory);
+        info!("Working directory: {}", working_directory);
 
         let bundle_path = match instproxy_client.get_path_for_bundle_identifier(app) {
             Ok(p) => p,
             Err(e) => {
-                debug!("Error getting path for bundle identifier: {:?}", e);
+                warn!("Error getting path for bundle identifier: {:?}", e);
                 return Err("Unable to get path for bundle identifier".to_string());
             }
         };
@@ -183,10 +184,10 @@ impl Client {
                 Err(_) => {
                     match self.upload_dev_dmg().await {
                         Ok(_) => {
-                            debug!("Successfully uploaded dev.dmg");
+                            info!("Successfully uploaded dev.dmg");
                         }
                         Err(e) => {
-                            debug!("Error uploading dev.dmg: {:?}", e);
+                            warn!("Error uploading dev.dmg: {:?}", e);
                             return Err(format!("Unable to upload dev.dmg: {:?}", e));
                         }
                     };
@@ -206,46 +207,46 @@ impl Client {
 
         match debug_server.send_command("QSetMaxPacketSize: 1024".into()) {
             Ok(res) => {
-                debug!("Successfully set max packet size: {:?}", res);
+                info!("Successfully set max packet size: {:?}", res);
             }
             Err(e) => {
-                debug!("Error setting max packet size: {:?}", e);
+                warn!("Error setting max packet size: {:?}", e);
                 return Err("Unable to set max packet size".to_string());
             }
         }
 
         match debug_server.send_command(format!("QSetWorkingDir: {}", working_directory).into()) {
             Ok(res) => {
-                debug!("Successfully set working directory: {:?}", res);
+                info!("Successfully set working directory: {:?}", res);
             }
             Err(e) => {
-                debug!("Error setting working directory: {:?}", e);
+                warn!("Error setting working directory: {:?}", e);
                 return Err("Unable to set working directory".to_string());
             }
         }
 
         match debug_server.set_argv(vec![bundle_path.clone(), bundle_path.clone()]) {
             Ok(res) => {
-                debug!("Successfully set argv: {:?}", res);
+                info!("Successfully set argv: {:?}", res);
             }
             Err(e) => {
-                debug!("Error setting argv: {:?}", e);
+                warn!("Error setting argv: {:?}", e);
                 return Err("Unable to set argv".to_string());
             }
         }
 
         match debug_server.send_command("qLaunchSuccess".into()) {
-            Ok(res) => debug!("Got launch response: {:?}", res),
+            Ok(res) => info!("Got launch response: {:?}", res),
             Err(e) => {
-                debug!("Error checking if app launched: {:?}", e);
+                warn!("Error checking if app launched: {:?}", e);
                 return Err("Unable to check if app launched".to_string());
             }
         }
 
         match debug_server.send_command("D".into()) {
-            Ok(res) => debug!("Detaching: {:?}", res),
+            Ok(res) => info!("Detaching: {:?}", res),
             Err(e) => {
-                debug!("Error detaching: {:?}", e);
+                warn!("Error detaching: {:?}", e);
                 return Err("Unable to detach".to_string());
             }
         }
@@ -263,11 +264,11 @@ impl Client {
 
         let lockdown_client = match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
             Ok(lckd) => {
-                debug!("Successfully connected to lockdownd");
+                info!("Successfully connected to lockdownd");
                 lckd
             }
             Err(e) => {
-                debug!("Error starting lockdown service: {:?}", e);
+                warn!("Error starting lockdown service: {:?}", e);
                 return Err("Unable to start lockdown".to_string());
             }
         };
@@ -276,12 +277,12 @@ impl Client {
             match lockdown_client.get_value("ProductVersion".to_string(), "".to_string()) {
                 Ok(ios_version) => ios_version.get_string_val().unwrap(),
                 Err(e) => {
-                    debug!("Error getting iOS version: {:?}", e);
+                    warn!("Error getting iOS version: {:?}", e);
                     return Err("Unable to get iOS version".to_string());
                 }
             };
 
-        debug!("iOS version: {}", ios_version);
+        info!("iOS version: {}", ios_version);
 
         Ok(ios_version)
     }
@@ -291,7 +292,7 @@ impl Client {
 
         // Check if directory exists
         let path = std::path::Path::new(&self.dmg_path).join(format!("{}.dmg", &ios_version));
-        debug!("Checking if {} exists", path.display());
+        info!("Checking if {} exists", path.display());
         if path.exists() {
             return Ok(String::from(path.to_string_lossy()));
         }
@@ -306,7 +307,7 @@ impl Client {
                 break;
             }
             // Download versions.json from GitHub
-            debug!("Downloading iOS dictionary...");
+            info!("Downloading iOS dictionary...");
             let response = match reqwest::get(lib).await {
                 Ok(response) => response,
                 Err(_) => {
@@ -333,7 +334,7 @@ impl Client {
         }
 
         // Download DMG zip
-        debug!("Downloading iOS {} DMG...", ios_version.clone());
+        info!("Downloading iOS {} DMG...", ios_version.clone());
         let resp = match reqwest::get(ios_dmg_url.unwrap()).await {
             Ok(resp) => resp,
             Err(_) => {
@@ -360,7 +361,7 @@ impl Client {
         };
         // Create tmp path
         let tmp_path = format!("{}/tmp", &self.dmg_path);
-        debug!("tmp path {}", tmp_path);
+        info!("tmp path {}", tmp_path);
         std::fs::create_dir_all(&tmp_path).unwrap();
         // Unzip zip
         let mut dmg_zip = match zip::ZipArchive::new(std::fs::File::open("dmg.zip").unwrap()) {
@@ -422,11 +423,11 @@ impl Client {
         let mut lockdown_client =
             match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
                 Ok(lckd) => {
-                    debug!("Successfully connected to lockdownd");
+                    info!("Successfully connected to lockdownd");
                     lckd
                 }
                 Err(e) => {
-                    debug!("Error starting lockdown service: {:?}", e);
+                    warn!("Error starting lockdown service: {:?}", e);
                     return Err("Unable to start lockdown".to_string());
                 }
             };
@@ -435,11 +436,11 @@ impl Client {
             .start_service("com.apple.mobile.mobile_image_mounter".to_string(), false)
         {
             Ok(service) => {
-                debug!("Successfully started com.apple.mobile.mobile_image_mounter");
+                info!("Successfully started com.apple.mobile.mobile_image_mounter");
                 service
             }
             Err(e) => {
-                debug!(
+                warn!(
                     "Error starting com.apple.mobile.mobile_image_mounter: {:?}",
                     e
                 );
@@ -449,17 +450,17 @@ impl Client {
 
         let mim = match device.new_mobile_image_mounter(&service) {
             Ok(mim) => {
-                debug!("Successfully started mobile_image_mounter");
+                info!("Successfully started mobile_image_mounter");
                 mim
             }
             Err(e) => {
-                debug!("Error starting mobile_image_mounter: {:?}", e);
+                warn!("Error starting mobile_image_mounter: {:?}", e);
                 return Err("Unable to start mobile_image_mounter".to_string());
             }
         };
 
-        debug!("Uploading DMG from: {}", dmg_path);
-        debug!(
+        info!("Uploading DMG from: {}", dmg_path);
+        info!(
             "signature: {}",
             format!("{}.signature", dmg_path.clone()).to_string()
         );
@@ -469,10 +470,10 @@ impl Client {
             format!("{}.signature", dmg_path.clone()).to_string(),
         ) {
             Ok(_) => {
-                debug!("Successfully uploaded image");
+                info!("Successfully uploaded image");
             }
             Err(e) => {
-                debug!("Error uploading image: {:?}", e);
+                warn!("Error uploading image: {:?}", e);
                 return Err("Unable to upload developer disk image".to_string());
             }
         }
@@ -482,10 +483,10 @@ impl Client {
             format!("{}.signature", dmg_path.clone()).to_string(),
         ) {
             Ok(_) => {
-                debug!("Successfully mounted image");
+                info!("Successfully mounted image");
             }
             Err(e) => {
-                debug!("Error mounting image: {:?}", e);
+                warn!("Error mounting image: {:?}", e);
                 return Err("Unable to mount developer disk image".to_string());
             }
         }

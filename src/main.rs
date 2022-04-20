@@ -3,7 +3,7 @@
 use backend::Backend;
 use bytes::BufMut;
 use futures::TryStreamExt;
-use rusty_libimobiledevice::{debug};
+use log::{info, warn};
 use plist_plus::Plist;
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
@@ -23,6 +23,10 @@ mod packets;
 #[tokio::main]
 async fn main() {
     println!("Starting JitStreamer...");
+
+    env_logger::init();
+    println!("Logger initialized");
+
     let config = config::Config::load();
     let static_dir = config.static_path.clone();
     let current_dir = std::env::current_dir().expect("failed to read current directory");
@@ -224,10 +228,10 @@ async fn list_apps(
     addr: Option<SocketAddr>,
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
-    debug!("Device list requested");
+    info!("Device list requested");
     let mut backend = backend.lock().await;
     if let None = addr {
-        debug!("No address provided");
+        warn!("No address provided");
         return Ok(packets::list_apps_response(
             false,
             "Unable to get IP address",
@@ -235,7 +239,7 @@ async fn list_apps(
         ));
     }
     if !backend.check_ip(&addr.unwrap().to_string()) {
-        debug!("Address not allowed");
+        warn!("Address not allowed");
         return Ok(packets::list_apps_response(
             false,
             "Address not allowed, connect to the VLAN",
@@ -245,7 +249,7 @@ async fn list_apps(
     let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
         Some(client) => client,
         None => {
-            debug!("No client found with the given IP");
+            warn!("No client found with the given IP");
             return Ok(packets::list_apps_response(
                 false,
                 "No client found with the given IP, please register your device",
@@ -257,7 +261,7 @@ async fn list_apps(
     let v = match client.get_apps().await {
         Ok(v) => v,
         Err(e) => {
-            debug!("Unable to get apps");
+            warn!("Unable to get apps");
             return Ok(packets::list_apps_response(
                 false,
                 &format!("Unable to get apps: {}", e).to_string(),
@@ -302,14 +306,14 @@ async fn shortcuts_run(
     addr: Option<SocketAddr>,
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
-    debug!("Device has sent request to launch {}", app);
+    info!("Device has sent request to launch {}", app);
     let mut backend = backend.lock().await;
     if let None = addr {
-        debug!("No address provided");
+        warn!("No address provided");
         return Ok(packets::launch_response(false, "Unable to get IP address"));
     }
     if !backend.check_ip(&addr.unwrap().to_string()) {
-        debug!("Address not allowed");
+        warn!("Address not allowed");
         return Ok(packets::list_apps_response(
             false,
             "Address not allowed, connect to the VLAN",
@@ -319,7 +323,7 @@ async fn shortcuts_run(
     let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
         Some(client) => client,
         None => {
-            debug!("No client found with the given IP");
+            warn!("No client found with the given IP");
             return Ok(packets::launch_response(
                 false,
                 "No client found with the given IP, please register your device",
@@ -342,14 +346,14 @@ async fn shortcuts_unregister(
     addr: Option<SocketAddr>,
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
-    debug!("Device has sent request unregister");
+    info!("Device has sent request unregister");
     let mut backend = backend.lock().await;
     if let None = addr {
-        debug!("No address provided");
+        warn!("No address provided");
         return Ok(packets::launch_response(false, "Unable to get IP address"));
     }
     if !backend.check_ip(&addr.unwrap().to_string()) {
-        debug!("Address not allowed");
+        warn!("Address not allowed");
         return Ok(packets::list_apps_response(
             false,
             "Address not allowed, connect to the VLAN",
