@@ -1,6 +1,7 @@
 // jkcoxson
 
 use log::warn;
+use rand::Rng;
 use rusty_libimobiledevice::idevice::Device;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
@@ -17,6 +18,15 @@ pub struct Backend {
     database_path: String,
     plist_storage: String,
     pub dmg_path: String,
+
+    #[serde(skip)]
+    pub pair_potential: Vec<PairPotential>,
+}
+
+#[derive(Debug)]
+pub struct PairPotential {
+    pub ip: String,
+    pub code: u16,
 }
 
 impl Backend {
@@ -32,6 +42,7 @@ impl Backend {
                     database_path: config.database_path.clone(),
                     plist_storage: config.plist_storage.clone(),
                     dmg_path: config.dmg_path.clone(),
+                    pair_potential: vec![],
                 };
             }
         };
@@ -44,6 +55,7 @@ impl Backend {
             database_path: config.database_path.clone(),
             plist_storage: config.plist_storage.clone(),
             dmg_path: config.dmg_path.clone(),
+            pair_potential: vec![],
         }
     }
 
@@ -168,6 +180,39 @@ impl Backend {
                 return Err(());
             }
         };
+    }
+
+    pub fn prefered_app(name: &str) -> bool {
+        let app_list = include_str!("known_apps.txt").to_string();
+        let apps: Vec<&str> = app_list.split("\n").collect();
+        for app in apps {
+            if name.contains(app) {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn potential_pair(&mut self, ip: String) -> u16 {
+        let mut rng = rand::thread_rng();
+        let code: u16 = rng.gen_range(10000..65535);
+
+        let p = PairPotential { ip, code };
+        self.pair_potential.push(p);
+        code
+    }
+
+    pub fn check_code(&mut self, code: u16) -> Option<String> {
+        let mut i = 0;
+        while i < self.pair_potential.len() {
+            if self.pair_potential[i].code == code {
+                let ip = self.pair_potential[i].ip.clone();
+                self.pair_potential.remove(i);
+                return Some(ip);
+            }
+            i = i + 1;
+        }
+        None
     }
 }
 

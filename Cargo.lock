@@ -733,6 +733,7 @@ dependencies = [
  "futures",
  "log",
  "plist_plus",
+ "rand",
  "reqwest",
  "rusty_libimobiledevice",
  "serde",

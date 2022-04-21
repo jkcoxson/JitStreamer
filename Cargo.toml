@@ -19,3 +19,4 @@ reqwest = { version = "*", features = [ "blocking" ] }
 zip = { version = "*" }
 log = { version = "*" }
 env_logger = { version = "*" }
+rand = { version = "*" }

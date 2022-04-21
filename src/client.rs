@@ -78,7 +78,7 @@ impl Client {
         Ok(device)
     }
 
-    pub async fn get_apps(&self) -> Result<Vec<String>, String> {
+    pub async fn get_apps(&self) -> Result<Plist, String> {
         let device = match self.connect().await {
             Ok(device) => device,
             Err(_) => {
@@ -97,8 +97,7 @@ impl Client {
             vec![("ApplicationType".to_string(), Plist::new_string("Any"))],
             vec![
                 "CFBundleIdentifier".to_string(),
-                "CFBundleExecutable".to_string(),
-                "Container".to_string(),
+                "CFBundleDisplayName".to_string(),
             ],
         );
         let lookup_results = match instproxy_client.lookup(vec![], Some(client_opts)) {
@@ -109,14 +108,7 @@ impl Client {
             }
         };
 
-        let p_iter = lookup_results.into_iter();
-        let mut apps = Vec::new();
-
-        for i in p_iter {
-            apps.push(i.key.unwrap());
-        }
-
-        Ok(apps)
+        Ok(lookup_results)
     }
 
     pub async fn debug_app(&self, app: String) -> Result<(), String> {

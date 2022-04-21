@@ -5,6 +5,7 @@ use bytes::BufMut;
 use futures::TryStreamExt;
 use log::{info, warn};
 use plist_plus::Plist;
+use serde_json::Value;
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
 use warp::{
@@ -31,18 +32,12 @@ async fn main() {
     let static_dir = config.static_path.clone();
     let current_dir = std::env::current_dir().expect("failed to read current directory");
     let backend = Arc::new(Mutex::new(backend::Backend::load(&config)));
-    let upload_backend = backend.clone();
+    let potential_backend = backend.clone();
+    let potential_follow_up_backend = backend.clone();
     let status_backend = backend.clone();
     let list_apps_backend = backend.clone();
     let shortcuts_launch_backend = backend.clone();
     let shortcuts_unregister_backend = backend.clone();
-
-    // Upload route
-    let upload_route = warp::path("upload")
-        .and(warp::post())
-        .and(warp::multipart::form().max_length(5_000_000))
-        .and(warp::filters::addr::remote())
-        .and_then(move |form, addr| upload_file(form, addr, upload_backend.clone()));
 
     // Status route
     let status_route = warp::path("status")
@@ -56,6 +51,20 @@ async fn main() {
             "https://www.youtube.com/watch?v=dQw4w9WgXcQ", // haha gottem
         ))
     });
+
+    // Potential route
+    let potential_route = warp::path("potential")
+        .and(warp::get())
+        .and(warp::filters::addr::remote())
+        .and_then(move |addr| potential_pair(addr, potential_backend.clone()));
+
+    // Potential follow up route
+    let potential_follow_up_route = warp::path!("potential_follow_up" / u16)
+        .and(warp::post())
+        .and(warp::multipart::form().max_length(5_000_000))
+        .and_then(move |code: u16, form: FormData| {
+            potential_follow_up(form, code, potential_follow_up_backend.clone())
+        });
 
     // Version route
     let version_route = warp::path("version")
@@ -81,8 +90,9 @@ async fn main() {
     // Assemble routes for service
     let routes = root_redirect()
         .or(warp::fs::dir(current_dir.join(static_dir)))
-        .or(upload_route)
         .or(status_route)
+        .or(potential_route)
+        .or(potential_follow_up_route)
         .or(list_apps_route)
         .or(shortcuts_launch_route)
         .or(version_route)
@@ -115,23 +125,54 @@ fn root_redirect() -> BoxedFilter<(impl Reply,)> {
 }
 
 async fn version_route() -> Result<impl Reply, Rejection> {
-    Ok("0.1.1")
+    Ok("0.1.2")
 }
 
-async fn upload_file(
-    form: FormData,
-    address: Option<SocketAddr>,
+async fn potential_pair(
+    addr: Option<SocketAddr>,
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
-    let lock = backend.lock().await;
+    let mut backend = backend.lock().await;
+    if let None = addr {
+        return Ok(packets::potential_pair_response(
+            false,
+            "No address provided",
+            0,
+        ));
+    }
+    if !backend.check_ip(&addr.unwrap().to_string()) {
+        return Ok(packets::potential_pair_response(
+            false,
+            "Invalid IP, join from the VLAN",
+            0,
+        ));
+    }
+
+    let code = backend.potential_pair(addr.unwrap().to_string());
+    Ok(packets::potential_pair_response(true, "", code))
+}
+
+async fn potential_follow_up(
+    form: FormData,
+    code: u16,
+    backend: Arc<Mutex<Backend>>,
+) -> Result<impl Reply, Rejection> {
+    let mut lock = backend.lock().await;
+    // Check to make sure the form is valid
     let parts: Vec<Part> = match form.try_collect().await {
         Ok(parts) => parts,
-        Err(_) => return Ok(packets::upload_response(false, "Form error")),
+        Err(_) => return Ok(packets::potential_follow_up_response(false, "Form error")),
     };
+    for part in parts {
+        if part.name() == "file" {
+            let ip = match lock.check_code(code) {
+                Some(ip) => ip,
+                None => {
+                    return Ok(packets::potential_follow_up_response(false, "Invalid code"));
+                }
+            };
 
-    for p in parts {
-        if p.name() == "file" {
-            let value = match p
+            let value = match part
                 .stream()
                 .try_fold(Vec::new(), |mut vec, data| {
                     vec.put(data);
@@ -140,14 +181,17 @@ async fn upload_file(
                 .await
             {
                 Ok(value) => value,
-                Err(_) => return Ok(packets::upload_response(false, "File error")),
+                Err(_) => return Ok(packets::potential_follow_up_response(false, "File error")),
             };
 
             // Get string from value
             let value = match String::from_utf8(value) {
                 Ok(value) => value,
                 Err(_) => {
-                    return Ok(packets::upload_response(false, "Unable to read file"));
+                    return Ok(packets::potential_follow_up_response(
+                        false,
+                        "Unable to read file",
+                    ));
                 }
             };
             // Attempt to parse it as an Apple Plist
@@ -163,13 +207,10 @@ async fn upload_file(
                     }
                 },
                 _ => {
-                    return Ok(packets::upload_response(false, "Invalid pairing file!"));
-                }
-            };
-            let address = match address {
-                Some(address) => address,
-                None => {
-                    return Ok(packets::upload_response(false, "No address provided"));
+                    return Ok(packets::potential_follow_up_response(
+                        false,
+                        "Invalid pairing file!",
+                    ));
                 }
             };
             let plist: Plist = Plist::from_xml(value).unwrap();
@@ -185,7 +226,7 @@ async fn upload_file(
             }
             drop(lock);
             // Make sure that the client is valid before adding it to the backend
-            match backend::Backend::test_new_client(&address.ip().to_string(), &udid).await {
+            match backend::Backend::test_new_client(&ip, &udid).await {
                 Ok(_) => {}
                 Err(_) => {
                     return Ok(packets::upload_response(
@@ -195,7 +236,7 @@ async fn upload_file(
                 }
             }
             let mut lock = backend.lock().await;
-            match lock.register_client(address.ip().to_string(), udid.clone()) {
+            match lock.register_client(ip, udid.clone()) {
                 Ok(_) => {}
                 Err(_) => {
                     return Ok(packets::upload_response(false, "Client already registered"));
@@ -204,7 +245,8 @@ async fn upload_file(
             return Ok(packets::upload_response(true, ""));
         }
     }
-    return Ok(packets::upload_response(false, "No file found"));
+
+    todo!()
 }
 
 async fn status(
@@ -235,7 +277,8 @@ async fn list_apps(
         return Ok(packets::list_apps_response(
             false,
             "Unable to get IP address",
-            vec![],
+            serde_json::Value::Object(serde_json::Map::new()),
+            serde_json::Value::Object(serde_json::Map::new()),
         ));
     }
     if !backend.check_ip(&addr.unwrap().to_string()) {
@@ -243,7 +286,8 @@ async fn list_apps(
         return Ok(packets::list_apps_response(
             false,
             "Address not allowed, connect to the VLAN",
-            vec![],
+            serde_json::Value::Object(serde_json::Map::new()),
+            serde_json::Value::Object(serde_json::Map::new()),
         ));
     }
     let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
@@ -253,7 +297,8 @@ async fn list_apps(
             return Ok(packets::list_apps_response(
                 false,
                 "No client found with the given IP, please register your device",
-                vec![],
+                serde_json::Value::Object(serde_json::Map::new()),
+                serde_json::Value::Object(serde_json::Map::new()),
             ));
         }
     };
@@ -265,40 +310,42 @@ async fn list_apps(
             return Ok(packets::list_apps_response(
                 false,
                 &format!("Unable to get apps: {}", e).to_string(),
-                vec![],
+                serde_json::Value::Object(serde_json::Map::new()),
+                serde_json::Value::Object(serde_json::Map::new()),
             ));
         }
     };
 
     // Trim the list of apps
-    let mut apps = vec![];
+    let mut prefered_apps = Value::Object(serde_json::Map::new());
+    let mut apps: Value = Value::Object(serde_json::Map::new());
     for i in v {
-        if i.starts_with("com.apple") {
+        let i = i.plist;
+        let name = i
+            .clone()
+            .dict_get_item("CFBundleDisplayName")
+            .unwrap()
+            .get_string_val()
+            .unwrap();
+        let bundle_id = i
+            .clone()
+            .dict_get_item("CFBundleIdentifier")
+            .unwrap()
+            .get_string_val()
+            .unwrap();
+        if bundle_id.contains("com.apple") {
             continue;
         }
-        if i.starts_with("com.google") {
-            continue;
+        if backend::Backend::prefered_app(&name) {
+            prefered_apps[&name] = serde_json::Value::String(bundle_id);
+        } else {
+            apps[&name] = serde_json::Value::String(bundle_id);
         }
-        if i.to_lowercase().contains("dolphin") {
-            apps.insert(0, i);
-            continue;
-        }
-        if i.to_lowercase().contains("utm") {
-            apps.insert(0, i);
-            continue;
-        }
-        if i.to_lowercase().contains("provenance") {
-            apps.insert(0, i);
-            continue;
-        }
-        if i.to_lowercase().contains("delta") {
-            apps.insert(0, i);
-            continue;
-        }
-        apps.push(i);
     }
 
-    Ok(packets::list_apps_response(true, "", apps))
+    let res = packets::list_apps_response(true, "", apps, prefered_apps);
+    println!("{}", res);
+    Ok(res)
 }
 
 async fn shortcuts_run(
@@ -314,10 +361,9 @@ async fn shortcuts_run(
     }
     if !backend.check_ip(&addr.unwrap().to_string()) {
         warn!("Address not allowed");
-        return Ok(packets::list_apps_response(
+        return Ok(packets::launch_response(
             false,
             "Address not allowed, connect to the VLAN",
-            vec![],
         ));
     }
     let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
@@ -354,10 +400,9 @@ async fn shortcuts_unregister(
     }
     if !backend.check_ip(&addr.unwrap().to_string()) {
         warn!("Address not allowed");
-        return Ok(packets::list_apps_response(
+        return Ok(packets::unregister_response(
             false,
             "Address not allowed, connect to the VLAN",
-            vec![],
         ));
     }
     match backend.unregister_client(addr.unwrap().ip().to_string()) {
