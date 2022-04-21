@@ -170,7 +170,11 @@ async fn potential_follow_up(
                 None => {
                     return Ok(packets::potential_follow_up_response(false, "Invalid code"));
                 }
-            };
+            }
+            .split(":")
+            .next()
+            .unwrap()
+            .to_string();
 
             let value = match part
                 .stream()
@@ -242,6 +246,7 @@ async fn potential_follow_up(
                     return Ok(packets::upload_response(false, "Client already registered"));
                 }
             }
+            lock.remove_code(code);
             return Ok(packets::upload_response(true, ""));
         }
     }

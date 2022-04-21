@@ -167,7 +167,7 @@ impl Backend {
         let ip = match IpAddr::from_str(ip) {
             Ok(ip) => ip,
             Err(e) => {
-                warn!("Error parsing ip: {}", e);
+                warn!("Error parsing ip {}: {}", ip, e);
                 return Err(());
             }
         };
@@ -207,12 +207,21 @@ impl Backend {
         while i < self.pair_potential.len() {
             if self.pair_potential[i].code == code {
                 let ip = self.pair_potential[i].ip.clone();
-                self.pair_potential.remove(i);
                 return Some(ip);
             }
             i = i + 1;
         }
         None
+    }
+
+    pub fn remove_code(&mut self, code: u16) {
+        let mut i = 0;
+        while i < self.pair_potential.len() {
+            if self.pair_potential[i].code == code {
+                self.pair_potential.remove(i);
+            }
+            i = i + 1;
+        }
     }
 }
 
