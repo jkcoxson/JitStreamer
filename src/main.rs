@@ -1,12 +1,20 @@
 // jkcoxson
 
 use backend::Backend;
+use bytes::BufMut;
+use futures::TryStreamExt;
 use log::{info, warn};
 use plist_plus::Plist;
 use serde_json::Value;
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
-use warp::{filters::BoxedFilter, http::Uri, path::FullPath, redirect, Filter, Rejection, Reply};
+use warp::{
+    filters::BoxedFilter,
+    http::Uri,
+    multipart::{FormData, Part},
+    path::FullPath,
+    redirect, Filter, Rejection, Reply,
+};
 
 mod backend;
 mod client;
@@ -24,6 +32,7 @@ async fn main() {
     let static_dir = config.static_path.clone();
     let current_dir = std::env::current_dir().expect("failed to read current directory");
     let backend = Arc::new(Mutex::new(backend::Backend::load(&config)));
+    let upload_backend = backend.clone();
     let potential_backend = backend.clone();
     let potential_follow_up_backend = backend.clone();
     let status_backend = backend.clone();
@@ -43,6 +52,13 @@ async fn main() {
             "https://www.youtube.com/watch?v=dQw4w9WgXcQ", // haha gottem
         ))
     });
+
+    // Upload route
+    let upload_route = warp::path("upload")
+        .and(warp::post())
+        .and(warp::multipart::form().max_length(5_000_000))
+        .and(warp::filters::addr::remote())
+        .and_then(move |form, addr| upload_file(form, addr, upload_backend.clone()));
 
     // Potential route
     let potential_route = warp::path("potential")
@@ -84,6 +100,7 @@ async fn main() {
     let routes = root_redirect()
         .or(warp::fs::dir(current_dir.join(static_dir)))
         .or(status_route)
+        .or(upload_route)
         .or(potential_route)
         .or(potential_follow_up_route)
         .or(list_apps_route)
@@ -119,6 +136,95 @@ fn root_redirect() -> BoxedFilter<(impl Reply,)> {
 
 async fn version_route() -> Result<impl Reply, Rejection> {
     Ok("0.1.2")
+}
+
+async fn upload_file(
+    form: FormData,
+    address: Option<SocketAddr>,
+    backend: Arc<Mutex<Backend>>,
+) -> Result<impl Reply, Rejection> {
+    let lock = backend.lock().await;
+    let parts: Vec<Part> = match form.try_collect().await {
+        Ok(parts) => parts,
+        Err(_) => return Ok(packets::upload_response(false, "Form error")),
+    };
+
+    for p in parts {
+        if p.name() == "file" {
+            let value = match p
+                .stream()
+                .try_fold(Vec::new(), |mut vec, data| {
+                    vec.put(data);
+                    async move { Ok(vec) }
+                })
+                .await
+            {
+                Ok(value) => value,
+                Err(_) => return Ok(packets::upload_response(false, "File error")),
+            };
+
+            // Get string from value
+            let value = match String::from_utf8(value) {
+                Ok(value) => value,
+                Err(_) => {
+                    return Ok(packets::upload_response(false, "Unable to read file"));
+                }
+            };
+            // Attempt to parse it as an Apple Plist
+            let plist: Plist = Plist::from_xml(value.clone()).unwrap();
+            let udid = match plist.dict_get_item("UDID") {
+                Ok(s) => match s.get_string_val() {
+                    Ok(s) => s,
+                    Err(_) => {
+                        return Ok(packets::upload_response(
+                            false,
+                            "Unable to read UDID from Plist",
+                        ));
+                    }
+                },
+                _ => {
+                    return Ok(packets::upload_response(false, "Invalid pairing file!"));
+                }
+            };
+            let address = match address {
+                Some(address) => address,
+                None => {
+                    return Ok(packets::upload_response(false, "No address provided"));
+                }
+            };
+            let plist: Plist = Plist::from_xml(value).unwrap();
+            // Save the plist to the plist storage directory
+            match lock.write_pairing_file(plist.to_string(), &udid) {
+                Ok(_) => {}
+                Err(_) => {
+                    return Ok(packets::upload_response(
+                        false,
+                        "Unable to save pairing file",
+                    ));
+                }
+            }
+            drop(lock);
+            // Make sure that the client is valid before adding it to the backend
+            match backend::Backend::test_new_client(&address.ip().to_string(), &udid).await {
+                Ok(_) => {}
+                Err(_) => {
+                    return Ok(packets::upload_response(
+                        false,
+                        "Device did not respond to pairing test",
+                    ));
+                }
+            }
+            let mut lock = backend.lock().await;
+            match lock.register_client(address.ip().to_string(), udid.clone()) {
+                Ok(_) => {}
+                Err(_) => {
+                    return Ok(packets::upload_response(false, "Client already registered"));
+                }
+            }
+            return Ok(packets::upload_response(true, ""));
+        }
+    }
+    return Ok(packets::upload_response(false, "No file found"));
 }
 
 async fn potential_pair(

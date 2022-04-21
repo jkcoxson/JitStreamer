@@ -42,10 +42,9 @@ pub fn list_apps_response(
     success: bool,
     message: &str,
     list: serde_json::Value,
-    mut prefered_list: serde_json::Value,
+    prefered_list: serde_json::Value,
 ) -> String {
     let mut packet: serde_json::Value = serde_json::Value::Object(serde_json::Map::new());
-    prefered_list["More"] = serde_json::Value::String("List all apps".to_string());
     packet["success"] = serde_json::Value::Bool(success);
     packet["message"] = serde_json::Value::String(message.to_string());
     packet["list"] = list;
