@@ -71,9 +71,6 @@ impl Backend {
         if self.get_by_ip(&ip).is_some() {
             return Err(());
         }
-        if self.get_by_udid(&udid).is_some() {
-            return Err(());
-        }
         let start = SystemTime::now();
         let since_the_epoch = start
             .duration_since(UNIX_EPOCH)
@@ -125,7 +122,7 @@ impl Backend {
         }
     }
 
-    pub fn get_by_udid(&self, udid: &str) -> Option<Client> {
+    pub fn _get_by_udid(&self, udid: &str) -> Option<Client> {
         let res = self.deserialized_clients.iter().find(|c| c.udid == udid);
         match res {
             Some(c) => Some(c.to_client(
