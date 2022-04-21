@@ -6,7 +6,7 @@ const VERSION: &str = "0.1.2";
 
 fn main() {
     // Collect arguments
-    let mut target = "".to_string();
+    let mut target = "https://jitstreamer.com".to_string();
     let args: Vec<String> = std::env::args().collect();
     let mut i = 0;
     while i < args.len() {
@@ -59,17 +59,73 @@ fn main() {
     }
     let device = device.unwrap();
 
-    // Attempt to use already generated pair file to avoid nullifying old pairing files
-    let pair_record = match userpref::read_pair_record(device.get_udid()) {
-        Ok(pair_record) => Some(pair_record),
-        Err(e) => {
-            println!("Error reading pair record: {:?}", e);
-            None
-        }
-    };
+    loop {
+        // Attempt to use already generated pair file to avoid nullifying old pairing files
+        let pair_record = match userpref::read_pair_record(device.get_udid()) {
+            Ok(pair_record) => Some(pair_record),
+            Err(e) => {
+                println!("Error reading pair record: {:?}", e);
+                None
+            }
+        };
 
-    if let Some(pair_record) = pair_record {
-        println!("{:?}", pair_record);
+        if let Some(mut pair_record) = pair_record {
+            // Add UDID to the pair record
+            pair_record
+                .dict_set_item("UDID", device.get_udid().to_string().into())
+                .unwrap();
+            let pair_record = pair_record.to_string();
+            let pair_record: Vec<u8> = pair_record.into_bytes();
+
+            // Ask the user for the launch code
+            println!("Please enter the code you got from the shortcut");
+            let mut launch_code = String::new();
+            std::io::stdin().read_line(&mut launch_code).unwrap();
+            launch_code = launch_code.trim().to_string();
+
+            // Yeet this bad boi off to JitStreamer
+            let client = reqwest::blocking::Client::new();
+            let res = client
+                .post(format!("{}/potential_follow_up/{}/", target, launch_code,).as_str())
+                .body(pair_record)
+                .send();
+
+            match res {
+                Ok(res) => {
+                    let res = res.text().unwrap();
+                    let res: serde_json::Value = serde_json::from_str(res.as_str()).unwrap();
+                    if res["success"].as_bool().unwrap() {
+                        println!("Successfully paired!");
+                        return;
+                    } else {
+                        println!("Failed to pair, attempting to regenerate the pair record");
+                    }
+                }
+                Err(e) => {
+                    println!("Error sending pair record: {:?}", e);
+                }
+            }
+        }
+
+        let lockdown_client = match device.new_lockdownd_client("jit_streamer_pair".to_string()) {
+            Ok(lockdown_client) => lockdown_client,
+            Err(e) => {
+                println!("Error getting lockdown client: {:?}", e);
+                continue;
+            }
+        };
+
+        loop {
+            match lockdown_client.pair(None, None) {
+                Ok(()) => break,
+                Err(e) => {
+                    println!("Error pairing: {:?}", e);
+                    println!("Make sure your device is unlocked and has a passcode");
+                    wait_for_enter();
+                    continue;
+                }
+            }
+        }
     }
 }
 
