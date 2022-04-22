@@ -6,11 +6,20 @@ const VERSION: &str = "0.1.2";
 
 fn main() {
     // Collect arguments
-    let mut target = "https://jitstreamer.com".to_string();
-    let args: Vec<String> = std::env::args().collect();
+    let mut target = "http://jitstreamer.com".to_string();
+    let mut args: Vec<String> = std::env::args().collect();
+
+    // Correct for Windows
+    for i in 0..args.len() {
+        if args[i].contains("—") {
+            args[i] = args[i].replace("—", "-"); // yes these are different
+        }
+    }
+
     let mut i = 0;
+
     while i < args.len() {
-        if args[i] == "--target" {
+        if args[i] == "--target" || args[i] == "-t" {
             target = args[i + 1].clone();
         }
         if args[i] == "-h" || args[i] == "--help" {
@@ -26,7 +35,6 @@ fn main() {
         }
         i = i + 1;
     }
-
     // Wait until a device is connected by USB
     let mut device = None;
     loop {
@@ -93,12 +101,19 @@ fn main() {
             match res {
                 Ok(res) => {
                     let res = res.text().unwrap();
-                    let res: serde_json::Value = serde_json::from_str(res.as_str()).unwrap();
+                    let res: serde_json::Value = match serde_json::from_str(res.as_str()) {
+                        Ok(res) => res,
+                        Err(_) => {
+                            println!("Error parsing response, pair failed");
+                            continue;
+                        }
+                    };
                     if res["success"].as_bool().unwrap() {
                         println!("Successfully paired!");
                         return;
                     } else {
                         println!("Failed to pair, attempting to regenerate the pair record");
+                        println!("Error: {}", res["message"].as_str().unwrap());
                     }
                 }
                 Err(e) => {
@@ -131,5 +146,6 @@ fn main() {
 
 fn wait_for_enter() {
     let mut input = String::new();
+    println!("Press enter to continue");
     std::io::stdin().read_line(&mut input).unwrap();
 }
