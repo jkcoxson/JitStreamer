@@ -110,6 +110,7 @@ fn main() {
                     };
                     if res["success"].as_bool().unwrap() {
                         println!("Successfully paired!");
+                        wait_for_enter();
                         return;
                     } else {
                         println!("Failed to pair, attempting to regenerate the pair record");
