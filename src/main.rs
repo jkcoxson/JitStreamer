@@ -248,6 +248,7 @@ async fn potential_pair(
     }
 
     let code = backend.potential_pair(addr.unwrap().to_string());
+    info!("A potential pair code was generated: {}", code);
     Ok(packets::potential_pair_response(true, "", code))
 }
 

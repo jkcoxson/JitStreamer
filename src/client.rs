@@ -173,18 +173,7 @@ impl Client {
         for _ in 1..4 {
             let ds = match device.new_debug_server("jitstreamer") {
                 Ok(d) => Some(d),
-                Err(_) => {
-                    match self.upload_dev_dmg().await {
-                        Ok(_) => {
-                            info!("Successfully uploaded dev.dmg");
-                        }
-                        Err(e) => {
-                            warn!("Error uploading dev.dmg: {:?}", e);
-                            return Err(format!("Unable to upload dev.dmg: {:?}", e));
-                        }
-                    };
-                    None
-                }
+                Err(_) => None,
             };
             if ds.is_some() {
                 debug_server = ds;
@@ -193,7 +182,29 @@ impl Client {
         }
 
         if debug_server.is_none() {
-            return Err("Unable to start debug server".to_string());
+            let device = match self.connect().await {
+                Ok(device) => device,
+                Err(_) => {
+                    return Err("Unable to connect to device for disk mounting".to_string());
+                }
+            };
+            let path = match self.get_dmg_path().await {
+                Ok(p) => p,
+                Err(_) => {
+                    return Err(
+                        "Unable to get dmg path, the server was set up incorrectly!".to_string()
+                    );
+                }
+            };
+            tokio::spawn(async move {
+                match Client::upload_dev_dmg(device, path).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        warn!("Error uploading dmg: {:?}", e);
+                    }
+                }
+            });
+            return Err("JitStreamer is mounting the developer disk image, please keep your device on and connected. Check back back in a few minutes.".to_string());
         }
         let debug_server = debug_server.unwrap();
 
@@ -403,15 +414,7 @@ impl Client {
         Ok(format!("{}/{}.dmg", &self.dmg_path, ios_version))
     }
 
-    pub async fn upload_dev_dmg(&self) -> Result<(), String> {
-        let device = match self.connect().await {
-            Ok(device) => device,
-            Err(_) => {
-                return Err("Unable to connect to device".to_string());
-            }
-        };
-        let dmg_path = self.get_dmg_path().await?;
-
+    pub async fn upload_dev_dmg(device: Device, dmg_path: String) -> Result<(), String> {
         let mut lockdown_client =
             match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
                 Ok(lckd) => {
