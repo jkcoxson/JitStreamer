@@ -257,8 +257,6 @@ async fn potential_follow_up(
     code: u16,
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
-    println!("FOLLOW UP");
-
     // Parse form to a string
     let value = match String::from_utf8(form.to_vec()) {
         Ok(form) => form,
@@ -426,7 +424,6 @@ async fn list_apps(
     }
 
     let res = packets::list_apps_response(true, "", apps, prefered_apps);
-    println!("{}", res);
     Ok(res)
 }
 
