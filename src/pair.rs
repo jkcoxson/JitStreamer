@@ -1,6 +1,6 @@
 // jkcoxson
 
-use rusty_libimobiledevice::{idevice::get_devices, services::userpref};
+use rusty_libimobiledevice::{error::LockdowndError, idevice::get_devices, services::userpref};
 
 const VERSION: &str = "0.1.2";
 
@@ -133,13 +133,23 @@ fn main() {
         };
 
         // Turn on WiFi sync so JitStreamer can pair
-        lockdown_client
-            .set_value(
-                "EnableWifiDebugging".to_string(),
-                "com.apple.mobile.wireless_lockdown".to_string(),
-                true.into(),
-            )
-            .unwrap();
+        match lockdown_client.set_value(
+            "EnableWifiDebugging".to_string(),
+            "com.apple.mobile.wireless_lockdown".to_string(),
+            true.into(),
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                if e == LockdowndError::UnknownError {
+                    println!("You need to set a passcode on your device for this to work.");
+                    wait_for_enter();
+                    return;
+                } else {
+                    println!("Error setting value: {:?}", e);
+                    continue;
+                }
+            }
+        }
 
         loop {
             match lockdown_client.pair(None, None) {
