@@ -67,8 +67,14 @@ fn main() {
     }
     let device = device.unwrap();
 
+    // Get the pairing code
+    println!("Please enter the code you got from the shortcut");
+    let mut launch_code = String::new();
+    std::io::stdin().read_line(&mut launch_code).unwrap();
+    launch_code = launch_code.trim().to_string();
+
     loop {
-        // Attempt to use already generated pair file to avoid nullifying old pairing files
+        // Fetch the pairing file from the system
         let pair_record = match userpref::read_pair_record(device.get_udid()) {
             Ok(pair_record) => Some(pair_record),
             Err(e) => {
@@ -84,12 +90,6 @@ fn main() {
                 .unwrap();
             let pair_record = pair_record.to_string();
             let pair_record: Vec<u8> = pair_record.into_bytes();
-
-            // Ask the user for the launch code
-            println!("Please enter the code you got from the shortcut");
-            let mut launch_code = String::new();
-            std::io::stdin().read_line(&mut launch_code).unwrap();
-            launch_code = launch_code.trim().to_string();
 
             // Yeet this bad boi off to JitStreamer
             let client = reqwest::blocking::Client::new();
@@ -109,7 +109,7 @@ fn main() {
                         }
                     };
                     if res["success"].as_bool().unwrap() {
-                        println!("Successfully paired!");
+                        println!("\nSuccessfully paired! Press ok on the shortcut now.");
                         wait_for_enter();
                         return;
                     } else {
@@ -123,6 +123,7 @@ fn main() {
             }
         }
 
+        // Fetching the pairing record failed, so we need to generate a new one
         let lockdown_client = match device.new_lockdownd_client("jit_streamer_pair".to_string()) {
             Ok(lockdown_client) => lockdown_client,
             Err(e) => {
@@ -130,6 +131,15 @@ fn main() {
                 continue;
             }
         };
+
+        // Turn on WiFi sync so JitStreamer can pair
+        lockdown_client
+            .set_value(
+                "EnableWifiDebugging".to_string(),
+                "com.apple.mobile.wireless_lockdown".to_string(),
+                true.into(),
+            )
+            .unwrap();
 
         loop {
             match lockdown_client.pair(None, None) {
