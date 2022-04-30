@@ -1,6 +1,10 @@
 // jkcoxson
 
-use std::{net::IpAddr, str::FromStr};
+use std::{
+    net::IpAddr,
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 
 use log::{info, warn};
 use rusty_libimobiledevice::{idevice::Device, services::instproxy::InstProxyClient};
@@ -26,7 +30,7 @@ impl Client {
     }
 
     /// Connects to a given device and runs preflight operations.
-    pub async fn connect(&self) -> Result<Device, String> {
+    pub async fn connect(&self) -> Result<(Device, Arc<Mutex<bool>>), String> {
         // Determine if device is in the muxer
         let ip = match IpAddr::from_str(&self.ip) {
             Ok(ip) => ip,
@@ -45,20 +49,14 @@ impl Client {
                 return Err("Unable to create heartbeat".to_string());
             }
         };
+        let stopper = Arc::new(Mutex::new(false));
+        let stopper_clone = Arc::clone(&stopper);
         tokio::task::spawn_blocking(move || {
             info!("Starting heartbeat loop");
             loop {
                 match heartbeat.receive(15000) {
                     Ok(plist) => {
                         info!("Received heartbeat: {:?}", plist);
-                        // let mut response = Plist::new_dict();
-                        // match response.dict_set_item("Command", "Polo".into()) {
-                        //     Ok(_) => {}
-                        //     Err(e) => {
-                        //         debug!("Error setting response: {:?}", e);
-                        //         return;
-                        //     }
-                        // }
                         match heartbeat.send(plist) {
                             Ok(_) => {}
                             Err(e) => {
@@ -72,14 +70,17 @@ impl Client {
                         break;
                     }
                 }
+                if *stopper_clone.lock().unwrap() {
+                    break;
+                }
             }
         });
 
-        Ok(device)
+        Ok((device, stopper))
     }
 
     pub async fn get_apps(&self) -> Result<Plist, String> {
-        let device = match self.connect().await {
+        let (device, stopper) = match self.connect().await {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -108,11 +109,13 @@ impl Client {
             }
         };
 
+        *stopper.lock().unwrap() = true;
+
         Ok(lookup_results)
     }
 
     pub async fn debug_app(&self, app: String) -> Result<(), String> {
-        let device = match self.connect().await {
+        let (device, stopper) = match self.connect().await {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -182,7 +185,7 @@ impl Client {
         }
 
         if debug_server.is_none() {
-            let device = match self.connect().await {
+            let (device, stopper) = match self.connect().await {
                 Ok(device) => device,
                 Err(_) => {
                     return Err("Unable to connect to device for disk mounting".to_string());
@@ -203,6 +206,7 @@ impl Client {
                         warn!("Error uploading dmg: {:?}", e);
                     }
                 }
+                *stopper.lock().unwrap() = true;
             });
             return Err("JitStreamer is mounting the developer disk image, please keep your device on and connected. Check back back in a few minutes.".to_string());
         }
@@ -254,11 +258,13 @@ impl Client {
             }
         }
 
+        *stopper.lock().unwrap() = true;
+
         Ok(())
     }
 
     pub async fn get_ios_version(&self) -> Result<String, String> {
-        let device = match self.connect().await {
+        let (device, stopper) = match self.connect().await {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -286,6 +292,8 @@ impl Client {
             };
 
         info!("iOS version: {}", ios_version);
+
+        *stopper.lock().unwrap() = true;
 
         Ok(ios_version)
     }
