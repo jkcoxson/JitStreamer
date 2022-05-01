@@ -9,7 +9,7 @@ default-run = "jit_streamer"
 
 [dependencies]
 tokio = { version = "*", features = [ "full" ] }
-warp = { version = "*" }
+warp = { version = "*", features = [ "tls" ] }
 futures = { version = "*" }
 bytes = { version = "*" }
 serde = { version = "*", features = [ "derive" ] }
