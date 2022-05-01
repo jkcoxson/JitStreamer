@@ -113,19 +113,21 @@ async fn main() {
     let addr: std::net::SocketAddr = format!("{}:{}", config.host, config.port)
         .parse()
         .expect("Invalid address");
-    println!("Ready!\n");
     if config.ssl_port.is_some() {
         let addr: std::net::SocketAddr = format!("{}:{}", config.host, config.ssl_port.unwrap())
             .parse()
             .expect("Invalid address");
         println!("Hosting with HTTPS");
-        warp::serve(ssl_routes)
-            .tls()
-            .cert_path(config.ssl_cert.unwrap())
-            .key_path(config.ssl_key.unwrap())
-            .run(addr)
-            .await;
+        tokio::spawn(async move {
+            warp::serve(ssl_routes)
+                .tls()
+                .cert_path(config.ssl_cert.unwrap())
+                .key_path(config.ssl_key.unwrap())
+                .run(addr)
+                .await;
+        });
     }
+    println!("Ready!\n");
     warp::serve(routes).run(addr).await;
 }
 
