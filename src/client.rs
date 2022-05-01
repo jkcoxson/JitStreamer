@@ -53,6 +53,7 @@ impl Client {
         let stopper_clone = Arc::clone(&stopper);
         tokio::task::spawn_blocking(move || {
             info!("Starting heartbeat loop");
+            let mut i = 0;
             loop {
                 match heartbeat.receive(15000) {
                     Ok(plist) => {
@@ -69,6 +70,11 @@ impl Client {
                         warn!("Error receiving heartbeat: {:?}", e);
                         break;
                     }
+                }
+                i = i + 1;
+                if i > 30 {
+                    info!("Heartbeat loop expired");
+                    break;
                 }
                 if *stopper_clone.lock().unwrap() {
                     break;
@@ -185,7 +191,7 @@ impl Client {
         }
 
         if debug_server.is_none() {
-            let (device, stopper) = match self.connect().await {
+            let (device, _stopper) = match self.connect().await {
                 Ok(device) => device,
                 Err(_) => {
                     return Err("Unable to connect to device for disk mounting".to_string());
@@ -206,7 +212,7 @@ impl Client {
                         warn!("Error uploading dmg: {:?}", e);
                     }
                 }
-                *stopper.lock().unwrap() = true;
+                // *stopper.lock().unwrap() = true;
             });
             return Err("JitStreamer is mounting the developer disk image, please keep your device on and connected. Check back back in a few minutes.".to_string());
         }
@@ -264,7 +270,7 @@ impl Client {
     }
 
     pub async fn get_ios_version(&self) -> Result<String, String> {
-        let (device, stopper) = match self.connect().await {
+        let (device, _stopper) = match self.connect().await {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -293,7 +299,7 @@ impl Client {
 
         info!("iOS version: {}", ios_version);
 
-        *stopper.lock().unwrap() = true;
+        //*stopper.lock().unwrap() = true;
 
         Ok(ios_version)
     }
