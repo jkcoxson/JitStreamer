@@ -55,7 +55,7 @@ impl Client {
             info!("Starting heartbeat loop");
             let mut i = 0;
             loop {
-                match heartbeat.receive(15000) {
+                match heartbeat.receive_async(15000).await {
                     Ok(plist) => {
                         info!("Received heartbeat: {:?}", plist);
                         match heartbeat.send(plist) {
