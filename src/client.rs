@@ -1,10 +1,6 @@
 // jkcoxson
 
-use std::{
-    net::IpAddr,
-    str::FromStr,
-    sync::{Arc, Mutex},
-};
+use std::{net::IpAddr, str::FromStr};
 
 use log::{info, warn};
 use rusty_libimobiledevice::{idevice::Device, services::instproxy::InstProxyClient};
@@ -30,7 +26,7 @@ impl Client {
     }
 
     /// Connects to a given device and runs preflight operations.
-    pub async fn connect(&self) -> Result<(Device, Arc<Mutex<bool>>), String> {
+    pub async fn connect(&self) -> Result<Device, String> {
         // Determine if device is in the muxer
         let ip = match IpAddr::from_str(&self.ip) {
             Ok(ip) => ip,
@@ -49,13 +45,10 @@ impl Client {
                 return Err("Unable to create heartbeat".to_string());
             }
         };
-        let stopper = Arc::new(Mutex::new(false));
-        let stopper_clone = Arc::clone(&stopper);
-        tokio::task::spawn_blocking(move || {
+        tokio::spawn(async move {
             info!("Starting heartbeat loop");
-            let mut i = 0;
             loop {
-                match heartbeat.receive_async(15000).await {
+                match heartbeat.receive_async(10000).await {
                     Ok(plist) => {
                         info!("Received heartbeat: {:?}", plist);
                         match heartbeat.send(plist) {
@@ -71,22 +64,14 @@ impl Client {
                         break;
                     }
                 }
-                i = i + 1;
-                if i > 30 {
-                    info!("Heartbeat loop expired");
-                    break;
-                }
-                if *stopper_clone.lock().unwrap() {
-                    break;
-                }
             }
         });
 
-        Ok((device, stopper))
+        Ok(device)
     }
 
     pub async fn get_apps(&self) -> Result<Plist, String> {
-        let (device, stopper) = match self.connect().await {
+        let device = match self.connect().await {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -115,13 +100,11 @@ impl Client {
             }
         };
 
-        *stopper.lock().unwrap() = true;
-
         Ok(lookup_results)
     }
 
     pub async fn debug_app(&self, app: String) -> Result<(), String> {
-        let (device, stopper) = match self.connect().await {
+        let device = match self.connect().await {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -191,7 +174,7 @@ impl Client {
         }
 
         if debug_server.is_none() {
-            let (device, _stopper) = match self.connect().await {
+            let device = match self.connect().await {
                 Ok(device) => device,
                 Err(_) => {
                     return Err("Unable to connect to device for disk mounting".to_string());
@@ -212,7 +195,7 @@ impl Client {
                         warn!("Error uploading dmg: {:?}", e);
                     }
                 }
-                // *stopper.lock().unwrap() = true;
+                //
             });
             return Err("JitStreamer is mounting the developer disk image, please keep your device on and connected. Check back back in a few minutes.".to_string());
         }
@@ -264,13 +247,11 @@ impl Client {
             }
         }
 
-        *stopper.lock().unwrap() = true;
-
         Ok(())
     }
 
     pub async fn get_ios_version(&self) -> Result<String, String> {
-        let (device, _stopper) = match self.connect().await {
+        let device = match self.connect().await {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -299,7 +280,7 @@ impl Client {
 
         info!("iOS version: {}", ios_version);
 
-        //*stopper.lock().unwrap() = true;
+        //
 
         Ok(ios_version)
     }
