@@ -195,7 +195,6 @@ impl Client {
                         warn!("Error uploading dmg: {:?}", e);
                     }
                 }
-                //
             });
             return Err("JitStreamer is mounting the developer disk image, please keep your device on and connected. Check back back in a few minutes.".to_string());
         }
@@ -410,76 +409,101 @@ impl Client {
     }
 
     pub async fn upload_dev_dmg(device: Device, dmg_path: String) -> Result<(), String> {
-        let mut lockdown_client =
-            match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
-                Ok(lckd) => {
-                    info!("Successfully connected to lockdownd");
-                    lckd
+        tokio::task::spawn_blocking(move || {
+            let mut lockdown_client =
+                match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
+                    Ok(lckd) => {
+                        info!("Successfully connected to lockdownd");
+                        lckd
+                    }
+                    Err(e) => {
+                        warn!("Error starting lockdown service: {:?}", e);
+                        return;
+                    }
+                };
+
+            let service = match lockdown_client
+                .start_service("com.apple.mobile.mobile_image_mounter".to_string(), false)
+            {
+                Ok(service) => {
+                    info!("Successfully started com.apple.mobile.mobile_image_mounter");
+                    service
                 }
                 Err(e) => {
-                    warn!("Error starting lockdown service: {:?}", e);
-                    return Err("Unable to start lockdown".to_string());
+                    warn!(
+                        "Error starting com.apple.mobile.mobile_image_mounter: {:?}",
+                        e
+                    );
+                    return;
                 }
             };
 
-        let service = match lockdown_client
-            .start_service("com.apple.mobile.mobile_image_mounter".to_string(), false)
-        {
-            Ok(service) => {
-                info!("Successfully started com.apple.mobile.mobile_image_mounter");
-                service
+            info!("Uploading DMG from: {}", dmg_path);
+            info!(
+                "signature: {}",
+                format!("{}.signature", dmg_path.clone()).to_string()
+            );
+            let mim = match device.new_mobile_image_mounter(&service) {
+                Ok(mim) => {
+                    info!("Successfully started mobile_image_mounter");
+                    mim
+                }
+                Err(e) => {
+                    warn!("Error starting mobile_image_mounter: {:?}", e);
+                    return;
+                }
+            };
+            let mut tries = 5;
+            loop {
+                match device.new_heartbeat_client("pls-work".to_string()) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        warn!("Error starting heartbeat: {:?}", e);
+                        if tries == 0 {
+                            return;
+                        }
+                        tries -= 1;
+                        continue;
+                    }
+                }
+                match mim.upload_image(
+                    dmg_path.clone(),
+                    "Developer".to_string(),
+                    format!("{}.signature", dmg_path.clone()).to_string(),
+                ) {
+                    Ok(_) => {
+                        info!("Successfully uploaded image");
+                    }
+                    Err(e) => {
+                        warn!("Error uploading image: {:?}", e);
+                        tries = tries - 1;
+                        if tries == 0 {
+                            return;
+                        }
+                        continue;
+                    }
+                }
+                match mim.mount_image(
+                    dmg_path.clone(),
+                    "Developer".to_string(),
+                    format!("{}.signature", dmg_path.clone()).to_string(),
+                ) {
+                    Ok(_) => {
+                        info!("Successfully mounted image");
+                    }
+                    Err(e) => {
+                        warn!("Error mounting image: {:?}", e);
+                        tries = tries - 1;
+                        if tries == 0 {
+                            return;
+                        }
+                        continue;
+                    }
+                }
+                break;
             }
-            Err(e) => {
-                warn!(
-                    "Error starting com.apple.mobile.mobile_image_mounter: {:?}",
-                    e
-                );
-                return Err("Unable to start com.apple.mobile.mobile_image_mounter".to_string());
-            }
-        };
+        });
 
-        let mim = match device.new_mobile_image_mounter(&service) {
-            Ok(mim) => {
-                info!("Successfully started mobile_image_mounter");
-                mim
-            }
-            Err(e) => {
-                warn!("Error starting mobile_image_mounter: {:?}", e);
-                return Err("Unable to start mobile_image_mounter".to_string());
-            }
-        };
-
-        info!("Uploading DMG from: {}", dmg_path);
-        info!(
-            "signature: {}",
-            format!("{}.signature", dmg_path.clone()).to_string()
-        );
-        match mim.upload_image(
-            dmg_path.clone(),
-            "Developer".to_string(),
-            format!("{}.signature", dmg_path.clone()).to_string(),
-        ) {
-            Ok(_) => {
-                info!("Successfully uploaded image");
-            }
-            Err(e) => {
-                warn!("Error uploading image: {:?}", e);
-                return Err("Unable to upload developer disk image".to_string());
-            }
-        }
-        match mim.mount_image(
-            dmg_path.clone(),
-            "Developer".to_string(),
-            format!("{}.signature", dmg_path.clone()).to_string(),
-        ) {
-            Ok(_) => {
-                info!("Successfully mounted image");
-            }
-            Err(e) => {
-                warn!("Error mounting image: {:?}", e);
-                return Err("Unable to mount developer disk image".to_string());
-            }
-        }
         Ok(())
     }
 }
