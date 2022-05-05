@@ -188,11 +188,20 @@ impl Client {
                     );
                 }
             };
-            tokio::spawn(async move {
-                match Client::upload_dev_dmg(device, path) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        warn!("Error uploading dmg: {:?}", e);
+            tokio::task::spawn_blocking(move || {
+                let mut i = 5;
+                loop {
+                    match Client::upload_dev_dmg(&device, &path) {
+                        Ok(_) => {
+                            break;
+                        }
+                        Err(e) => {
+                            warn!("Error uploading dmg: {:?}", e);
+                            i -= 1;
+                            if i == 0 {
+                                return;
+                            }
+                        }
                     }
                 }
             });
@@ -408,7 +417,7 @@ impl Client {
         Ok(format!("{}/{}.dmg", &self.dmg_path, ios_version))
     }
 
-    pub fn upload_dev_dmg(device: Device, dmg_path: String) -> Result<(), String> {
+    pub fn upload_dev_dmg(device: &Device, dmg_path: &String) -> Result<(), String> {
         let mut lockdown_client =
             match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
                 Ok(lckd) => {
