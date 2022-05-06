@@ -1,7 +1,7 @@
 // jkcoxson
 
 use log::{info, warn};
-use rusty_libimobiledevice::idevice::Device;
+use rusty_libimobiledevice::{idevice::Device, services::heartbeat::HeartbeatClient};
 use std::collections::HashMap;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -24,6 +24,7 @@ impl Heart {
         }
     }
     pub fn start(&mut self, client: &Device) {
+        info!("Heart lock received");
         let client = client.clone();
         // Check to see if the device already has a heartbeat channel
         if self.devices.contains_key(&client.get_udid()) {
@@ -38,9 +39,20 @@ impl Heart {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         self.devices.insert(client.get_udid(), tx);
 
+        let heartbeat_client = match client.new_heartbeat_client("JitStreamer".to_string()) {
+            Ok(heartbeat) => {
+                info!("Heartbeat client created successfully");
+                heartbeat
+            }
+            Err(e) => {
+                warn!("Error creating heartbeat: {:?}", e);
+                return;
+            }
+        };
+
         // Start the heartbeat
         tokio::spawn(async move {
-            heartbeat_loop(client, rx).await;
+            heartbeat_loop(heartbeat_client, rx).await;
         });
     }
     pub fn kill(&mut self, udid: impl Into<String>) {
@@ -53,39 +65,27 @@ impl Heart {
     }
 }
 
-async fn heartbeat_loop(device: Device, mut rx: UnboundedReceiver<()>) {
-    let mut heartbeat_client = None;
+async fn heartbeat_loop(heartbeat_client: HeartbeatClient, mut rx: UnboundedReceiver<()>) {
     loop {
-        if heartbeat_client.is_none() {
-            heartbeat_client = match device.new_heartbeat_client("JitStreamer".to_string()) {
-                Ok(heartbeat) => Some(heartbeat),
-                Err(e) => {
-                    warn!("Error creating heartbeat: {:?}", e);
-                    None
-                }
-            };
-            continue;
-        }
         tokio::select! {
             _ = rx.recv() => {
                 info!("Heartbeat instructed to die");
                 return;
             }
-            res = heartbeat_client.as_mut().unwrap().receive_async(10000) => {
+            res = heartbeat_client.receive_async(10000) => {
                 match res {
                     Ok(plist) => {
-                        info!("Received heartbeat: {:?}", plist);
-                        match heartbeat_client.as_mut().unwrap().send(plist) {
+                        info!("Received heartbeat");
+                        match heartbeat_client.send(plist) {
                             Ok(_) => {}
                             Err(e) => {
                                 warn!("Error sending response: {:?}", e);
-                                heartbeat_client = None;
                             }
                         }
                     }
                     Err(e) => {
                         warn!("Error receiving heartbeat: {:?}", e);
-                        heartbeat_client = None;
+                        break;
                     }
                 }
             }

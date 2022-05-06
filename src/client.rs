@@ -85,6 +85,7 @@ impl Client {
             }
         };
 
+        info!("Waiting for a heart lock");
         (*self.heart.lock().await).kill(device.get_udid());
 
         Ok(lookup_results)
