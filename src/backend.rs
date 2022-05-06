@@ -6,12 +6,15 @@ use rusty_libimobiledevice::idevice::Device;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::Mutex;
 
 use crate::client::Client;
 use crate::config::Config;
+use crate::heartbeat::Heart;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct Backend {
     deserialized_clients: Vec<DeserializedClient>,
     pub allowed_ips: Vec<String>,
@@ -21,6 +24,9 @@ pub struct Backend {
 
     #[serde(skip)]
     pub pair_potential: Vec<PairPotential>,
+
+    #[serde(skip)]
+    pub heart: Arc<Mutex<Heart>>,
 }
 
 #[derive(Debug)]
@@ -43,6 +49,7 @@ impl Backend {
                     plist_storage: config.plist_storage.clone(),
                     dmg_path: config.dmg_path.clone(),
                     pair_potential: vec![],
+                    heart: Arc::new(Mutex::new(Heart::new())),
                 };
             }
         };
@@ -56,6 +63,7 @@ impl Backend {
             plist_storage: config.plist_storage.clone(),
             dmg_path: config.dmg_path.clone(),
             pair_potential: vec![],
+            heart: Arc::new(Mutex::new(Heart::new())),
         }
     }
 
@@ -129,6 +137,7 @@ impl Backend {
             Some(c) => Some(c.to_client(
                 &format!("{}/{}.plist", self.plist_storage, c.udid),
                 &self.dmg_path,
+                self.heart.clone(),
             )),
             None => None,
         }
@@ -140,6 +149,7 @@ impl Backend {
             Some(c) => Some(c.to_client(
                 &format!("{}/{}.plist", self.plist_storage, c.udid),
                 &self.dmg_path,
+                self.heart.clone(),
             )),
             None => None,
         }
@@ -239,12 +249,18 @@ pub struct DeserializedClient {
 }
 
 impl DeserializedClient {
-    pub fn to_client(&self, plist_path: &String, dmg_path: &String) -> Client {
+    pub fn to_client(
+        &self,
+        plist_path: &String,
+        dmg_path: &String,
+        heart: Arc<Mutex<Heart>>,
+    ) -> Client {
         Client {
             ip: self.ip.clone(),
             udid: self.udid.clone(),
             pairing_file: plist_path.to_string(),
             dmg_path: dmg_path.to_string(),
+            heart,
         }
     }
 }

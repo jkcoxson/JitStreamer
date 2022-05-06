@@ -1,27 +1,36 @@
 // jkcoxson
 
-use std::{net::IpAddr, str::FromStr};
-
 use log::{info, warn};
-use rusty_libimobiledevice::{idevice::Device, services::instproxy::InstProxyClient};
-
 use plist_plus::Plist;
+use rusty_libimobiledevice::{idevice::Device, services::instproxy::InstProxyClient};
+use std::{net::IpAddr, str::FromStr, sync::Arc};
+use tokio::sync::Mutex;
+
+use crate::heartbeat::Heart;
 
 pub struct Client {
     pub ip: String,
     pub udid: String,
     pub pairing_file: String,
     pub dmg_path: String,
+    pub heart: Arc<Mutex<Heart>>,
 }
 
 impl Client {
     #[allow(dead_code)]
-    pub fn new(ip: String, udid: String, pairing_file: String, dmg_path: String) -> Client {
+    pub fn new(
+        ip: String,
+        udid: String,
+        pairing_file: String,
+        dmg_path: String,
+        heart: Arc<Mutex<Heart>>,
+    ) -> Client {
         Client {
             ip,
             udid,
             pairing_file,
             dmg_path,
+            heart,
         }
     }
 
@@ -38,34 +47,8 @@ impl Client {
         let device = Device::new(self.udid.clone(), true, Some(ip), 0).unwrap();
         info!("Starting heartbeat {}", self.udid);
 
-        let heartbeat = match device.new_heartbeat_client("JitStreamer".to_string()) {
-            Ok(heartbeat) => heartbeat,
-            Err(e) => {
-                warn!("Error creating heartbeat: {:?}", e);
-                return Err("Unable to create heartbeat".to_string());
-            }
-        };
-        tokio::spawn(async move {
-            info!("Starting heartbeat loop");
-            loop {
-                match heartbeat.receive_async(10000).await {
-                    Ok(plist) => {
-                        info!("Received heartbeat: {:?}", plist);
-                        match heartbeat.send(plist) {
-                            Ok(_) => {}
-                            Err(e) => {
-                                warn!("Error sending response: {:?}", e);
-                                return;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        warn!("Error receiving heartbeat: {:?}", e);
-                        break;
-                    }
-                }
-            }
-        });
+        // Start heartbeat
+        (*self.heart.lock().await).start(&device);
 
         Ok(device)
     }
@@ -82,6 +65,7 @@ impl Client {
             Ok(instproxy) => instproxy,
             Err(e) => {
                 warn!("Error starting instproxy: {:?}", e);
+                (*self.heart.lock().await).kill(device.get_udid());
                 return Err("Unable to start instproxy".to_string());
             }
         };
@@ -96,9 +80,12 @@ impl Client {
             Ok(apps) => apps,
             Err(e) => {
                 warn!("Error looking up apps: {:?}", e);
+                (*self.heart.lock().await).kill(device.get_udid());
                 return Err("Unable to lookup apps".to_string());
             }
         };
+
+        (*self.heart.lock().await).kill(device.get_udid());
 
         Ok(lookup_results)
     }
@@ -115,6 +102,7 @@ impl Client {
             Ok(instproxy) => instproxy,
             Err(e) => {
                 warn!("Error starting instproxy: {:?}", e);
+                (*self.heart.lock().await).kill(device.get_udid());
                 return Err("Unable to start instproxy".to_string());
             }
         };
@@ -130,6 +118,7 @@ impl Client {
             Ok(apps) => apps,
             Err(e) => {
                 warn!("Error looking up apps: {:?}", e);
+                (*self.heart.lock().await).kill(device.get_udid());
                 return Err("Unable to lookup apps".to_string());
             }
         };
@@ -139,6 +128,7 @@ impl Client {
             Ok(p) => p,
             Err(_) => {
                 warn!("App not found");
+                (*self.heart.lock().await).kill(device.get_udid());
                 return Err("App not found".to_string());
             }
         };
@@ -147,6 +137,7 @@ impl Client {
             Ok(p) => p,
             Err(_) => {
                 warn!("App not found");
+                (*self.heart.lock().await).kill(device.get_udid());
                 return Err("App not found".to_string());
             }
         };
@@ -156,6 +147,7 @@ impl Client {
             Ok(p) => p,
             Err(e) => {
                 warn!("Error getting path for bundle identifier: {:?}", e);
+                (*self.heart.lock().await).kill(device.get_udid());
                 return Err("Unable to get path for bundle identifier".to_string());
             }
         };
@@ -183,22 +175,30 @@ impl Client {
             let path = match self.get_dmg_path().await {
                 Ok(p) => p,
                 Err(_) => {
+                    (*self.heart.lock().await).kill(device.get_udid());
                     return Err(
                         "Unable to get dmg path, the server was set up incorrectly!".to_string()
                     );
                 }
             };
+            let heart = self.heart.clone();
             tokio::task::spawn_blocking(move || {
                 let mut i = 5;
                 loop {
                     match Client::upload_dev_dmg(&device, &path) {
                         Ok(_) => {
+                            tokio::spawn(async move {
+                                (*heart.lock().await).kill(device.get_udid());
+                            });
                             break;
                         }
                         Err(e) => {
                             warn!("Error uploading dmg: {:?}", e);
                             i -= 1;
                             if i == 0 {
+                                tokio::spawn(async move {
+                                    (*heart.lock().await).kill(device.get_udid());
+                                });
                                 return;
                             }
                         }
@@ -215,6 +215,7 @@ impl Client {
             }
             Err(e) => {
                 warn!("Error setting max packet size: {:?}", e);
+                (*self.heart.lock().await).kill(device.get_udid());
                 return Err("Unable to set max packet size".to_string());
             }
         }
@@ -225,6 +226,7 @@ impl Client {
             }
             Err(e) => {
                 warn!("Error setting working directory: {:?}", e);
+                (*self.heart.lock().await).kill(device.get_udid());
                 return Err("Unable to set working directory".to_string());
             }
         }
@@ -235,6 +237,7 @@ impl Client {
             }
             Err(e) => {
                 warn!("Error setting argv: {:?}", e);
+                (*self.heart.lock().await).kill(device.get_udid());
                 return Err("Unable to set argv".to_string());
             }
         }
@@ -243,6 +246,7 @@ impl Client {
             Ok(res) => info!("Got launch response: {:?}", res),
             Err(e) => {
                 warn!("Error checking if app launched: {:?}", e);
+                (*self.heart.lock().await).kill(device.get_udid());
                 return Err("Unable to check if app launched".to_string());
             }
         }
@@ -251,9 +255,12 @@ impl Client {
             Ok(res) => info!("Detaching: {:?}", res),
             Err(e) => {
                 warn!("Error detaching: {:?}", e);
+                (*self.heart.lock().await).kill(device.get_udid());
                 return Err("Unable to detach".to_string());
             }
         }
+
+        (*self.heart.lock().await).kill(device.get_udid());
 
         Ok(())
     }
@@ -287,8 +294,6 @@ impl Client {
             };
 
         info!("iOS version: {}", ios_version);
-
-        //
 
         Ok(ios_version)
     }

@@ -19,6 +19,7 @@ use warp::{
 mod backend;
 mod client;
 mod config;
+mod heartbeat;
 mod packets;
 
 #[tokio::main]
