@@ -66,6 +66,17 @@ impl Heart {
 }
 
 async fn heartbeat_loop(heartbeat_client: HeartbeatClient, mut rx: UnboundedReceiver<()>) {
+    // Read initially to get the first message
+    match heartbeat_client.receive(0) {
+        Ok(message) => {
+            info!("Received first message: {:?}", message);
+        }
+        Err(e) => {
+            warn!("Error receiving first message: {:?}", e);
+            return;
+        }
+    }
+
     loop {
         tokio::select! {
             _ = rx.recv() => {
