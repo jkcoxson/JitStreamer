@@ -85,9 +85,6 @@ impl Client {
             }
         };
 
-        info!("Waiting for a heart lock");
-        (*self.heart.lock().await).kill(device.get_udid());
-
         Ok(lookup_results)
     }
 
@@ -167,12 +164,6 @@ impl Client {
         }
 
         if debug_server.is_none() {
-            let device = match self.connect().await {
-                Ok(device) => device,
-                Err(_) => {
-                    return Err("Unable to connect to device for disk mounting".to_string());
-                }
-            };
             let path = match self.get_dmg_path().await {
                 Ok(p) => p,
                 Err(_) => {
@@ -182,31 +173,19 @@ impl Client {
                     );
                 }
             };
-            let heart = self.heart.clone();
-            tokio::task::spawn_blocking(move || {
-                let mut i = 5;
-                loop {
-                    match Client::upload_dev_dmg(&device, &path) {
-                        Ok(_) => {
-                            tokio::spawn(async move {
-                                (*heart.lock().await).kill(device.get_udid());
-                            });
-                            break;
-                        }
-                        Err(e) => {
-                            warn!("Error uploading dmg: {:?}", e);
-                            i -= 1;
-                            if i == 0 {
-                                tokio::spawn(async move {
-                                    (*heart.lock().await).kill(device.get_udid());
-                                });
-                                return;
-                            }
+            let mut i = 5;
+            loop {
+                match Client::upload_dev_dmg(&device, &path) {
+                    Ok(_) => break,
+                    Err(e) => {
+                        warn!("Error uploading dmg: {:?}", e);
+                        i -= 1;
+                        if i == 0 {
+                            return Err("Unable to upload dmg".to_string());
                         }
                     }
                 }
-            });
-            return Err("JitStreamer is mounting the developer disk image, please keep your device on and connected. Check back back in a few minutes.".to_string());
+            }
         }
         let debug_server = debug_server.unwrap();
 

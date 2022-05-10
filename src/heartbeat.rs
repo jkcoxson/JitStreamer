@@ -1,12 +1,14 @@
 // jkcoxson
 
 use log::{info, warn};
-use rusty_libimobiledevice::{idevice::Device, services::heartbeat::HeartbeatClient};
-use std::collections::HashMap;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use rusty_libimobiledevice::idevice::Device;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 pub struct Heart {
-    devices: HashMap<String, UnboundedSender<()>>,
+    devices: HashMap<String, Arc<Mutex<bool>>>,
 }
 
 impl Default for Heart {
@@ -24,8 +26,6 @@ impl Heart {
         }
     }
     pub fn start(&mut self, client: &Device) {
-        info!("Heart lock received");
-        let client = client.clone();
         // Check to see if the device already has a heartbeat channel
         if self.devices.contains_key(&client.get_udid()) {
             info!(
@@ -34,72 +34,80 @@ impl Heart {
             );
             return;
         }
+        // Create a new heartbeat mutex
+        let mutex = Arc::new(Mutex::new(false));
 
-        // Create a new heartbeat channel
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        self.devices.insert(client.get_udid(), tx);
-
-        let heartbeat_client = match client.new_heartbeat_client("JitStreamer".to_string()) {
-            Ok(heartbeat) => {
-                info!("Heartbeat client created successfully");
-                heartbeat
-            }
-            Err(e) => {
-                warn!("Error creating heartbeat: {:?}", e);
+        let udid = client.get_udid();
+        let ip_addr = match client.get_ip_address() {
+            Some(ip) => ip,
+            None => {
+                warn!("Device {} has no IP address", udid);
                 return;
             }
         };
 
         // Start the heartbeat
-        tokio::spawn(async move {
-            heartbeat_loop(heartbeat_client, rx).await;
+        tokio::task::spawn_blocking(|| {
+            heartbeat_loop(udid, ip_addr, mutex);
         });
     }
     pub fn kill(&mut self, udid: impl Into<String>) {
         let udid = udid.into();
         info!("Attempting to kill heartbeat for {}", udid);
         if self.devices.contains_key(&udid) {
-            let sender = self.devices.remove(&udid).unwrap();
-            sender.send(()).unwrap();
+            let stopper = self.devices.remove(&udid).unwrap();
+            // Set stopper to true so the heartbeat loop will exit
+            let mut stopper = stopper.lock().unwrap();
+            *stopper = true;
         }
     }
 }
 
-async fn heartbeat_loop(heartbeat_client: HeartbeatClient, mut rx: UnboundedReceiver<()>) {
-    // Read initially to get the first message
-    match heartbeat_client.receive(0) {
-        Ok(message) => {
-            info!("Received first message: {:?}", message);
-        }
-        Err(e) => {
-            warn!("Error receiving first message: {:?}", e);
-            return;
-        }
-    }
-
+fn heartbeat_loop(udid: String, ip_addr: String, stopper: Arc<Mutex<bool>>) {
     loop {
-        tokio::select! {
-            _ = rx.recv() => {
-                info!("Heartbeat instructed to die");
+        let device = match Device::new(
+            (&udid).to_string(),
+            true,
+            Some(ip_addr.parse().unwrap()),
+            69,
+        ) {
+            Ok(device) => device,
+            Err(e) => {
+                warn!("Error connecting to device {}: {:?}", udid, e);
                 return;
             }
-            res = heartbeat_client.receive_async(10000) => {
-                match res {
-                    Ok(plist) => {
-                        info!("Received heartbeat");
-                        match heartbeat_client.send(plist) {
-                            Ok(_) => {}
-                            Err(e) => {
-                                warn!("Error sending response: {:?}", e);
-                            }
+        };
+        let heartbeat_client = match device.new_heartbeat_client("JitStreamer".to_string()) {
+            Ok(heartbeat) => heartbeat,
+            Err(e) => {
+                warn!("Error creating heartbeat for {}: {:?}", udid, e);
+                return;
+            }
+        };
+
+        loop {
+            match heartbeat_client.receive(15000) {
+                Ok(plist) => {
+                    info!("Received heartbeat");
+                    match heartbeat_client.send(plist) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            warn!("Error sending response: {:?}", e);
                         }
                     }
-                    Err(e) => {
-                        warn!("Error receiving heartbeat: {:?}", e);
-                        break;
-                    }
+                }
+                Err(e) => {
+                    warn!("Error receiving heartbeat: {:?}", e);
+                    break;
                 }
             }
+            if stopper.lock().unwrap().clone() {
+                info!("Stopping heartbeat for {}", udid);
+                break;
+            }
+        }
+        if stopper.lock().unwrap().clone() {
+            break;
         }
     }
 }
