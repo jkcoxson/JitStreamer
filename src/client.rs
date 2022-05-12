@@ -85,6 +85,8 @@ impl Client {
             }
         };
 
+        (*self.heart.lock().await).kill(device.get_udid());
+
         Ok(lookup_results)
     }
 
@@ -173,19 +175,29 @@ impl Client {
                     );
                 }
             };
-            let mut i = 5;
-            loop {
-                match Client::upload_dev_dmg(&device, &path) {
-                    Ok(_) => break,
-                    Err(e) => {
-                        warn!("Error uploading dmg: {:?}", e);
-                        i -= 1;
-                        if i == 0 {
-                            return Err("Unable to upload dmg".to_string());
+            let device = device.clone();
+            let heart = self.heart.clone();
+            tokio::task::spawn_blocking(move || {
+                let mut i = 5;
+                loop {
+                    match Client::upload_dev_dmg(&device, &path) {
+                        Ok(_) => {
+                            (*heart.blocking_lock()).kill(device.get_udid());
+                            break;
+                        }
+                        Err(e) => {
+                            warn!("Error uploading dmg: {:?}", e);
+                            i -= 1;
+                            if i == 0 {
+                                (*heart.blocking_lock()).kill(device.get_udid());
+                                break;
+                            }
                         }
                     }
                 }
-            }
+            });
+
+            return Err("JitStreamer is mounting your developer disk image. This should only take a minute or two, run this shortcut again in a bit. Keep your device on and connected.".to_string());
         }
         let debug_server = debug_server.unwrap();
 

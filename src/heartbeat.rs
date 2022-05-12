@@ -46,10 +46,18 @@ impl Heart {
             }
         };
 
+        // Insert the mutex into the hashmap
+        self.devices.insert(udid.clone(), mutex.clone());
+
         // Start the heartbeat
-        tokio::task::spawn_blocking(|| {
-            heartbeat_loop(udid, ip_addr, mutex);
-        });
+        for _ in 0..4 {
+            let mutex = mutex.clone();
+            let udid = udid.clone();
+            let ip_addr = ip_addr.clone();
+            tokio::task::spawn_blocking(|| {
+                heartbeat_loop(udid, ip_addr, mutex);
+            });
+        }
     }
     pub fn kill(&mut self, udid: impl Into<String>) {
         let udid = udid.into();
@@ -102,12 +110,9 @@ fn heartbeat_loop(udid: String, ip_addr: String, stopper: Arc<Mutex<bool>>) {
                 }
             }
             if stopper.lock().unwrap().clone() {
-                info!("Stopping heartbeat for {}", udid);
-                break;
+                info!("We have been instructed to die: {}", udid);
+                return;
             }
-        }
-        if stopper.lock().unwrap().clone() {
-            break;
         }
     }
 }
