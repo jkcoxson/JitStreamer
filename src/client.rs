@@ -3,8 +3,11 @@
 use log::{info, warn};
 use plist_plus::Plist;
 use rusty_libimobiledevice::{idevice::Device, services::instproxy::InstProxyClient};
-use std::{net::IpAddr, str::FromStr, sync::Arc};
-use tokio::sync::Mutex;
+use std::{
+    net::IpAddr,
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 
 use crate::heartbeat::Heart;
 
@@ -35,7 +38,7 @@ impl Client {
     }
 
     /// Connects to a given device and runs preflight operations.
-    pub async fn connect(&self) -> Result<Device, String> {
+    pub fn connect(&self) -> Result<Device, String> {
         // Determine if device is in the muxer
         let ip = match IpAddr::from_str(&self.ip) {
             Ok(ip) => ip,
@@ -48,13 +51,13 @@ impl Client {
         info!("Starting heartbeat {}", self.udid);
 
         // Start heartbeat
-        (*self.heart.lock().await).start(&device);
+        (*self.heart.lock().unwrap()).start(&device);
 
         Ok(device)
     }
 
-    pub async fn get_apps(&self) -> Result<Plist, String> {
-        let device = match self.connect().await {
+    pub fn get_apps(&self) -> Result<Plist, String> {
+        let device = match self.connect() {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -65,7 +68,7 @@ impl Client {
             Ok(instproxy) => instproxy,
             Err(e) => {
                 warn!("Error starting instproxy: {:?}", e);
-                (*self.heart.lock().await).kill(device.get_udid());
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("Unable to start instproxy".to_string());
             }
         };
@@ -80,18 +83,18 @@ impl Client {
             Ok(apps) => apps,
             Err(e) => {
                 warn!("Error looking up apps: {:?}", e);
-                (*self.heart.lock().await).kill(device.get_udid());
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("Unable to lookup apps".to_string());
             }
         };
 
-        (*self.heart.lock().await).kill(device.get_udid());
+        (*self.heart.lock().unwrap()).kill(device.get_udid());
 
         Ok(lookup_results)
     }
 
-    pub async fn debug_app(&self, app: String) -> Result<(), String> {
-        let device = match self.connect().await {
+    pub fn debug_app(&self, app: String) -> Result<(), String> {
+        let device = match self.connect() {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -102,7 +105,7 @@ impl Client {
             Ok(instproxy) => instproxy,
             Err(e) => {
                 warn!("Error starting instproxy: {:?}", e);
-                (*self.heart.lock().await).kill(device.get_udid());
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("Unable to start instproxy".to_string());
             }
         };
@@ -118,7 +121,7 @@ impl Client {
             Ok(apps) => apps,
             Err(e) => {
                 warn!("Error looking up apps: {:?}", e);
-                (*self.heart.lock().await).kill(device.get_udid());
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("Unable to lookup apps".to_string());
             }
         };
@@ -128,7 +131,7 @@ impl Client {
             Ok(p) => p,
             Err(_) => {
                 warn!("App not found");
-                (*self.heart.lock().await).kill(device.get_udid());
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("App not found".to_string());
             }
         };
@@ -137,7 +140,7 @@ impl Client {
             Ok(p) => p,
             Err(_) => {
                 warn!("App not found");
-                (*self.heart.lock().await).kill(device.get_udid());
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("App not found".to_string());
             }
         };
@@ -147,7 +150,7 @@ impl Client {
             Ok(p) => p,
             Err(e) => {
                 warn!("Error getting path for bundle identifier: {:?}", e);
-                (*self.heart.lock().await).kill(device.get_udid());
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("Unable to get path for bundle identifier".to_string());
             }
         };
@@ -166,10 +169,10 @@ impl Client {
         }
 
         if debug_server.is_none() {
-            let path = match self.get_dmg_path().await {
+            let path = match self.get_dmg_path() {
                 Ok(p) => p,
                 Err(_) => {
-                    (*self.heart.lock().await).kill(device.get_udid());
+                    (*self.heart.lock().unwrap()).kill(device.get_udid());
                     return Err(
                         "Unable to get dmg path, the server was set up incorrectly!".to_string()
                     );
@@ -182,14 +185,14 @@ impl Client {
                 loop {
                     match Client::upload_dev_dmg(&device, &path) {
                         Ok(_) => {
-                            (*heart.blocking_lock()).kill(device.get_udid());
+                            (*heart.lock().unwrap()).kill(device.get_udid());
                             break;
                         }
                         Err(e) => {
                             warn!("Error uploading dmg: {:?}", e);
                             i -= 1;
                             if i == 0 {
-                                (*heart.blocking_lock()).kill(device.get_udid());
+                                (*heart.lock().unwrap()).kill(device.get_udid());
                                 break;
                             }
                         }
@@ -207,7 +210,7 @@ impl Client {
             }
             Err(e) => {
                 warn!("Error setting max packet size: {:?}", e);
-                (*self.heart.lock().await).kill(device.get_udid());
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("Unable to set max packet size".to_string());
             }
         }
@@ -218,7 +221,7 @@ impl Client {
             }
             Err(e) => {
                 warn!("Error setting working directory: {:?}", e);
-                (*self.heart.lock().await).kill(device.get_udid());
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("Unable to set working directory".to_string());
             }
         }
@@ -229,7 +232,7 @@ impl Client {
             }
             Err(e) => {
                 warn!("Error setting argv: {:?}", e);
-                (*self.heart.lock().await).kill(device.get_udid());
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("Unable to set argv".to_string());
             }
         }
@@ -238,7 +241,7 @@ impl Client {
             Ok(res) => info!("Got launch response: {:?}", res),
             Err(e) => {
                 warn!("Error checking if app launched: {:?}", e);
-                (*self.heart.lock().await).kill(device.get_udid());
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("Unable to check if app launched".to_string());
             }
         }
@@ -247,18 +250,18 @@ impl Client {
             Ok(res) => info!("Detaching: {:?}", res),
             Err(e) => {
                 warn!("Error detaching: {:?}", e);
-                (*self.heart.lock().await).kill(device.get_udid());
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("Unable to detach".to_string());
             }
         }
 
-        (*self.heart.lock().await).kill(device.get_udid());
+        (*self.heart.lock().unwrap()).kill(device.get_udid());
 
         Ok(())
     }
 
-    pub async fn attach_debugger(&self, pid: u16) -> Result<(), String> {
-        let device = self.connect().await?;
+    pub fn attach_debugger(&self, pid: u16) -> Result<(), String> {
+        let device = self.connect()?;
         let debug_server = match device.new_debug_server("jitstreamer") {
             Ok(d) => d,
             Err(_) => {
@@ -288,8 +291,8 @@ impl Client {
         Ok(())
     }
 
-    pub async fn get_ios_version(&self) -> Result<String, String> {
-        let device = match self.connect().await {
+    pub fn get_ios_version(&self) -> Result<String, String> {
+        let device = match self.connect() {
             Ok(device) => device,
             Err(_) => {
                 return Err("Unable to connect to device".to_string());
@@ -321,8 +324,8 @@ impl Client {
         Ok(ios_version)
     }
 
-    pub async fn get_dmg_path(&self) -> Result<String, String> {
-        let ios_version = self.get_ios_version().await?;
+    pub fn get_dmg_path(&self) -> Result<String, String> {
+        let ios_version = self.get_ios_version()?;
 
         // Check if directory exists
         let path = std::path::Path::new(&self.dmg_path).join(format!("{}.dmg", &ios_version));
@@ -342,13 +345,13 @@ impl Client {
             }
             // Download versions.json from GitHub
             info!("Downloading iOS dictionary...");
-            let response = match reqwest::get(lib).await {
+            let response = match reqwest::blocking::get(lib) {
                 Ok(response) => response,
                 Err(_) => {
                     return Err("Error downloading versions.json".to_string());
                 }
             };
-            let contents = match response.text().await {
+            let contents = match response.text() {
                 Ok(contents) => contents,
                 Err(_) => {
                     return Err("Error reading versions.json".to_string());
@@ -369,7 +372,7 @@ impl Client {
 
         // Download DMG zip
         info!("Downloading iOS {} DMG...", ios_version.clone());
-        let resp = match reqwest::get(ios_dmg_url.unwrap()).await {
+        let resp = match reqwest::blocking::get(ios_dmg_url.unwrap()) {
             Ok(resp) => resp,
             Err(_) => {
                 return Err("Error downloading DMG".to_string());
@@ -381,7 +384,7 @@ impl Client {
                 return Err("Error creating temp DMG.zip".to_string());
             }
         };
-        let mut content = std::io::Cursor::new(match resp.bytes().await {
+        let mut content = std::io::Cursor::new(match resp.bytes() {
             Ok(content) => content,
             Err(_) => {
                 return Err("Error reading DMG".to_string());

@@ -7,7 +7,7 @@ use log::{info, warn};
 use plist_plus::Plist;
 use serde_json::Value;
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use warp::{
     filters::BoxedFilter,
     http::Uri,
@@ -406,17 +406,30 @@ async fn list_apps(
         }
     };
     drop(backend);
-    let v = match client.get_apps().await {
+
+    let (tx, mut rx) = mpsc::channel(1);
+
+    tokio::task::spawn_blocking(move || {
+        let v = match client.get_apps() {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("Unable to get apps");
+                tx.blocking_send(Err(packets::list_apps_response(
+                    false,
+                    &format!("Unable to get apps: {}", e).to_string(),
+                    serde_json::Value::Object(serde_json::Map::new()),
+                    serde_json::Value::Object(serde_json::Map::new()),
+                )))
+                .unwrap();
+                return;
+            }
+        };
+        tx.blocking_send(Ok(v)).unwrap();
+    });
+
+    let v = match rx.recv().await.unwrap() {
         Ok(v) => v,
-        Err(e) => {
-            warn!("Unable to get apps");
-            return Ok(packets::list_apps_response(
-                false,
-                &format!("Unable to get apps: {}", e).to_string(),
-                serde_json::Value::Object(serde_json::Map::new()),
-                serde_json::Value::Object(serde_json::Map::new()),
-            ));
-        }
+        Err(e) => return Ok(e),
     };
 
     // Trim the list of apps
@@ -480,14 +493,22 @@ async fn shortcuts_run(
     };
     drop(backend);
 
-    match client.debug_app(app.clone()).await {
-        Ok(_) => {
-            return Ok(packets::launch_response(true, ""));
-        }
-        Err(e) => {
-            return Ok(packets::launch_response(false, &e));
-        }
-    };
+    let (tx, mut rx) = mpsc::channel(1);
+
+    tokio::task::spawn_blocking(move || {
+        match client.debug_app(app.clone()) {
+            Ok(_) => {
+                tx.blocking_send(packets::launch_response(true, ""))
+                    .unwrap();
+            }
+            Err(e) => {
+                tx.blocking_send(packets::launch_response(false, &e))
+                    .unwrap();
+            }
+        };
+    });
+
+    Ok(rx.recv().await.unwrap())
 }
 
 async fn attach_debugger(
@@ -520,14 +541,22 @@ async fn attach_debugger(
     };
     drop(backend);
 
-    match client.attach_debugger(pid).await {
-        Ok(_) => {
-            return Ok(packets::attach_response(true, ""));
-        }
-        Err(e) => {
-            return Ok(packets::attach_response(false, &e));
-        }
-    };
+    let (tx, mut rx) = mpsc::channel(1);
+
+    tokio::task::spawn_blocking(move || {
+        match client.attach_debugger(pid) {
+            Ok(_) => {
+                tx.blocking_send(packets::attach_response(true, ""))
+                    .unwrap();
+            }
+            Err(e) => {
+                tx.blocking_send(packets::attach_response(false, &e))
+                    .unwrap();
+            }
+        };
+    });
+
+    Ok(rx.recv().await.unwrap())
 }
 
 async fn shortcuts_unregister(

@@ -6,9 +6,8 @@ use rusty_libimobiledevice::idevice::Device;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::Mutex;
 
 use crate::client::Client;
 use crate::config::Config;
