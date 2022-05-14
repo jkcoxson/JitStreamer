@@ -40,6 +40,7 @@ async fn main() {
     let list_apps_backend = backend.clone();
     let shortcuts_launch_backend = backend.clone();
     let shortcuts_unregister_backend = backend.clone();
+    let attach_backend = backend.clone();
 
     // Status route
     let status_route = warp::path("status")
@@ -97,6 +98,11 @@ async fn main() {
         .and(warp::filters::addr::remote())
         .and_then(move |addr| shortcuts_unregister(addr, shortcuts_unregister_backend.clone()));
 
+    let attach_route = warp::path!("attach" / u16)
+        .and(warp::post())
+        .and(warp::filters::addr::remote())
+        .and_then(move |code: u16, addr| attach_debugger(code, addr, attach_backend.clone()));
+
     // Assemble routes for service
     let routes = root_redirect()
         .or(warp::fs::dir(current_dir.join(static_dir)))
@@ -106,6 +112,7 @@ async fn main() {
         .or(potential_follow_up_route)
         .or(list_apps_route)
         .or(shortcuts_launch_route)
+        .or(attach_route)
         .or(version_route)
         .or(unregister_route)
         .or(admin_route);
@@ -479,6 +486,46 @@ async fn shortcuts_run(
         }
         Err(e) => {
             return Ok(packets::launch_response(false, &e));
+        }
+    };
+}
+
+async fn attach_debugger(
+    pid: u16,
+    addr: Option<SocketAddr>,
+    backend: Arc<Mutex<Backend>>,
+) -> Result<impl Reply, Rejection> {
+    info!("Device has sent request to attach to process {}", pid);
+    let mut backend = backend.lock().await;
+    if let None = addr {
+        warn!("No address provided");
+        return Ok(packets::attach_response(false, "Unable to get IP address"));
+    }
+    if !backend.check_ip(&addr.unwrap().to_string()) {
+        warn!("Address not allowed");
+        return Ok(packets::attach_response(
+            false,
+            "Address not allowed, connect to the VLAN",
+        ));
+    }
+    let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
+        Some(client) => client,
+        None => {
+            warn!("No client found with the given IP");
+            return Ok(packets::attach_response(
+                false,
+                "No client found with the given IP, please register your device",
+            ));
+        }
+    };
+    drop(backend);
+
+    match client.attach_debugger(pid).await {
+        Ok(_) => {
+            return Ok(packets::attach_response(true, ""));
+        }
+        Err(e) => {
+            return Ok(packets::attach_response(false, &e));
         }
     };
 }

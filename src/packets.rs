@@ -59,6 +59,13 @@ pub fn launch_response(success: bool, message: &str) -> String {
     serde_json::to_string(&packet).unwrap()
 }
 
+pub fn attach_response(sucess: bool, message: &str) -> String {
+    let mut packet: serde_json::Value = serde_json::Value::Object(serde_json::Map::new());
+    packet["success"] = serde_json::Value::Bool(sucess);
+    packet["message"] = serde_json::Value::String(message.to_string());
+    serde_json::to_string(&packet).unwrap()
+}
+
 #[derive(Serialize)]
 pub struct Version {
     pub version: String,

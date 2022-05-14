@@ -257,6 +257,37 @@ impl Client {
         Ok(())
     }
 
+    pub async fn attach_debugger(&self, pid: u16) -> Result<(), String> {
+        let device = self.connect().await?;
+        let debug_server = match device.new_debug_server("jitstreamer") {
+            Ok(d) => d,
+            Err(_) => {
+                warn!("Error creating debug server");
+                return Err("Unable to create debug server".to_string());
+            }
+        };
+
+        let command = format!("vAttach;0000{:X}", pid);
+
+        match debug_server.send_command(command.into()) {
+            Ok(res) => info!("Successfully attached: {:?}", res),
+            Err(e) => {
+                warn!("Error attaching: {:?}", e);
+                return Err("Unable to attach".to_string());
+            }
+        }
+
+        match debug_server.send_command("D".into()) {
+            Ok(res) => info!("Detaching: {:?}", res),
+            Err(e) => {
+                warn!("Error detaching: {:?}", e);
+                return Err("Unable to detach".to_string());
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn get_ios_version(&self) -> Result<String, String> {
         let device = match self.connect().await {
             Ok(device) => device,
