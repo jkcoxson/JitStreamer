@@ -1,7 +1,7 @@
 // jkcoxson
 
 use log::{info, warn};
-use rusty_libimobiledevice::idevice::Device;
+use rusty_libimobiledevice::{idevice::Device, services::heartbeat::HeartbeatClient};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -38,25 +38,22 @@ impl Heart {
         let mutex = Arc::new(Mutex::new(false));
 
         let udid = client.get_udid();
-        let ip_addr = match client.get_ip_address() {
-            Some(ip) => ip,
-            None => {
-                warn!("Device {} has no IP address", udid);
-                return;
-            }
-        };
 
         // Insert the mutex into the hashmap
         self.devices.insert(udid.clone(), mutex.clone());
 
         // Start the heartbeat
-        for _ in 0..4 {
+        for i in 0..1 {
             let mutex = mutex.clone();
-            let udid = udid.clone();
-            let ip_addr = ip_addr.clone();
+            info!("Creating heartbeat from device");
+            let heartbeat_client = client
+                .new_heartbeat_client(format!("JitStreamerHeartbeat-{}-{}", client.get_udid(), i))
+                .unwrap();
+            info!("Client created");
             tokio::task::spawn_blocking(|| {
-                heartbeat_loop(udid, ip_addr, mutex);
+                heartbeat_loop(heartbeat_client, mutex);
             });
+            info!("Thread spawned");
         }
     }
     pub fn kill(&mut self, udid: impl Into<String>) {
@@ -71,48 +68,27 @@ impl Heart {
     }
 }
 
-fn heartbeat_loop(udid: String, ip_addr: String, stopper: Arc<Mutex<bool>>) {
+fn heartbeat_loop(heartbeat_client: HeartbeatClient, stopper: Arc<Mutex<bool>>) {
+    info!("Heartbeat loop started");
     loop {
-        let device = match Device::new(
-            (&udid).to_string(),
-            true,
-            Some(ip_addr.parse().unwrap()),
-            69,
-        ) {
-            Ok(device) => device,
-            Err(e) => {
-                warn!("Error connecting to device {}: {:?}", udid, e);
-                return;
-            }
-        };
-        let heartbeat_client = match device.new_heartbeat_client("JitStreamer".to_string()) {
-            Ok(heartbeat) => heartbeat,
-            Err(e) => {
-                warn!("Error creating heartbeat for {}: {:?}", udid, e);
-                return;
-            }
-        };
-
-        loop {
-            match heartbeat_client.receive(15000) {
-                Ok(plist) => {
-                    info!("Received heartbeat");
-                    match heartbeat_client.send(plist) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            warn!("Error sending response: {:?}", e);
-                        }
+        match heartbeat_client.receive(15000) {
+            Ok(plist) => {
+                info!("Received heartbeat");
+                match heartbeat_client.send(plist) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        warn!("Error sending response: {:?}", e);
                     }
                 }
-                Err(e) => {
-                    warn!("Error receiving heartbeat: {:?}", e);
-                    break;
-                }
             }
-            if stopper.lock().unwrap().clone() {
-                info!("We have been instructed to die: {}", udid);
-                return;
+            Err(e) => {
+                warn!("Error receiving heartbeat: {:?}", e);
+                break;
             }
+        }
+        if stopper.lock().unwrap().clone() {
+            info!("We have been instructed to die");
+            return;
         }
     }
 }
