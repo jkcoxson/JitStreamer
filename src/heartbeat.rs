@@ -46,14 +46,20 @@ impl Heart {
         for i in 0..1 {
             let mutex = mutex.clone();
             info!("Creating heartbeat from device");
-            let heartbeat_client = client
-                .new_heartbeat_client(format!("JitStreamerHeartbeat-{}-{}", client.get_udid(), i))
-                .unwrap();
-            info!("Client created");
+            let heartbeat_client = match client.new_heartbeat_client(format!(
+                "JitStreamerHeartbeat-{}-{}",
+                client.get_udid(),
+                i
+            )) {
+                Ok(heartbeat_client) => heartbeat_client,
+                Err(e) => {
+                    warn!("Error creating heartbeat client: {:?}", e);
+                    return;
+                }
+            };
             tokio::task::spawn_blocking(|| {
                 heartbeat_loop(heartbeat_client, mutex);
             });
-            info!("Thread spawned");
         }
     }
     pub fn kill(&mut self, udid: impl Into<String>) {
