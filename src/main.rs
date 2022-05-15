@@ -1,5 +1,7 @@
 // jkcoxson
 
+pub const VERSION: &str = "0.1.2";
+
 use backend::Backend;
 use bytes::BufMut;
 use futures::TryStreamExt;
@@ -41,6 +43,7 @@ async fn main() {
     let shortcuts_launch_backend = backend.clone();
     let shortcuts_unregister_backend = backend.clone();
     let attach_backend = backend.clone();
+    let census_backend = backend.clone();
 
     // Status route
     let status_route = warp::path("status")
@@ -82,6 +85,11 @@ async fn main() {
         .and(warp::get())
         .and_then(|| version_route());
 
+    // Census route
+    let census_route = warp::path("census")
+        .and(warp::get())
+        .and_then(move || census(census_backend.clone()));
+
     // Shortcuts route
     let list_apps_route = warp::path!("shortcuts" / "list_apps")
         .and(warp::get())
@@ -114,6 +122,7 @@ async fn main() {
         .or(shortcuts_launch_route)
         .or(attach_route)
         .or(version_route)
+        .or(census_route)
         .or(unregister_route)
         .or(admin_route);
     let ssl_routes = routes.clone();
@@ -158,7 +167,16 @@ fn root_redirect() -> BoxedFilter<(impl Reply,)> {
 }
 
 async fn version_route() -> Result<impl Reply, Rejection> {
-    Ok("0.1.2")
+    Ok(VERSION)
+}
+
+async fn census(backend: Arc<Mutex<Backend>>) -> Result<impl Reply, Rejection> {
+    let lock = backend.lock().await;
+    Ok(packets::census_response(
+        lock.counter.clone(),
+        lock.deserialized_clients.len(),
+        VERSION.to_string(),
+    ))
 }
 
 async fn upload_file(
@@ -374,7 +392,7 @@ async fn list_apps(
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
     info!("Device list requested");
-    let mut backend = backend.lock().await;
+    let mut lock = backend.lock().await;
     if let None = addr {
         warn!("No address provided");
         return Ok(packets::list_apps_response(
@@ -384,7 +402,7 @@ async fn list_apps(
             serde_json::Value::Object(serde_json::Map::new()),
         ));
     }
-    if !backend.check_ip(&addr.unwrap().to_string()) {
+    if !lock.check_ip(&addr.unwrap().to_string()) {
         warn!("Address not allowed");
         return Ok(packets::list_apps_response(
             false,
@@ -393,7 +411,7 @@ async fn list_apps(
             serde_json::Value::Object(serde_json::Map::new()),
         ));
     }
-    let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
+    let client = match lock.get_by_ip(&addr.unwrap().ip().to_string()) {
         Some(client) => client,
         None => {
             warn!("No client found with the given IP");
@@ -405,7 +423,7 @@ async fn list_apps(
             ));
         }
     };
-    drop(backend);
+    drop(lock);
 
     let (tx, mut rx) = mpsc::channel(1);
 
@@ -435,6 +453,7 @@ async fn list_apps(
     // Trim the list of apps
     let mut prefered_apps = Value::Object(serde_json::Map::new());
     let mut apps: Value = Value::Object(serde_json::Map::new());
+    let mut count = 0;
     for i in v {
         let i = i.plist;
         let name = i
@@ -457,7 +476,11 @@ async fn list_apps(
         } else {
             apps[&name] = serde_json::Value::String(bundle_id);
         }
+        count += 1;
     }
+
+    let mut lock = backend.lock().await;
+    lock.counter.fetched += count;
 
     let res = packets::list_apps_response(true, "", apps, prefered_apps);
     Ok(res)
@@ -469,19 +492,19 @@ async fn shortcuts_run(
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
     info!("Device has sent request to launch {}", app);
-    let mut backend = backend.lock().await;
+    let mut lock = backend.lock().await;
     if let None = addr {
         warn!("No address provided");
         return Ok(packets::launch_response(false, "Unable to get IP address"));
     }
-    if !backend.check_ip(&addr.unwrap().to_string()) {
+    if !lock.check_ip(&addr.unwrap().to_string()) {
         warn!("Address not allowed");
         return Ok(packets::launch_response(
             false,
             "Address not allowed, connect to the VLAN",
         ));
     }
-    let client = match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
+    let client = match lock.get_by_ip(&addr.unwrap().ip().to_string()) {
         Some(client) => client,
         None => {
             warn!("No client found with the given IP");
@@ -491,7 +514,8 @@ async fn shortcuts_run(
             ));
         }
     };
-    drop(backend);
+    lock.counter.launched += 1;
+    drop(lock);
 
     let (tx, mut rx) = mpsc::channel(1);
 
@@ -539,6 +563,7 @@ async fn attach_debugger(
             ));
         }
     };
+    backend.counter.attached += 1;
     drop(backend);
 
     let (tx, mut rx) = mpsc::channel(1);

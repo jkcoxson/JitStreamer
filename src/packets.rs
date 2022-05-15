@@ -1,6 +1,10 @@
 // jkcoxson
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use serde::Serialize;
+
+use crate::backend::Counter;
 
 pub fn status_packet(valid_ip: bool, registered: bool) -> String {
     let mut packet: serde_json::Value = serde_json::Value::Object(serde_json::Map::new());
@@ -63,6 +67,22 @@ pub fn attach_response(sucess: bool, message: &str) -> String {
     let mut packet: serde_json::Value = serde_json::Value::Object(serde_json::Map::new());
     packet["success"] = serde_json::Value::Bool(sucess);
     packet["message"] = serde_json::Value::String(message.to_string());
+    serde_json::to_string(&packet).unwrap()
+}
+
+pub fn census_response(counter: Counter, clients: usize, version: String) -> String {
+    let mut packet: serde_json::Value = serde_json::Value::Object(serde_json::Map::new());
+    packet["launched"] = serde_json::Value::Number(serde_json::Number::from(counter.launched));
+    packet["attached"] = serde_json::Value::Number(serde_json::Number::from(counter.attached));
+    packet["fetched"] = serde_json::Value::Number(serde_json::Number::from(counter.fetched));
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    packet["uptime"] =
+        serde_json::Value::Number(serde_json::Number::from(now - counter.uptime.as_secs()));
+    packet["clients"] = serde_json::Value::Number(serde_json::Number::from(clients));
+    packet["version"] = serde_json::Value::String(version);
     serde_json::to_string(&packet).unwrap()
 }
 

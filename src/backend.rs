@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::client::Client;
 use crate::config::Config;
@@ -15,7 +15,7 @@ use crate::heartbeat::Heart;
 
 #[derive(Serialize, Deserialize)]
 pub struct Backend {
-    deserialized_clients: Vec<DeserializedClient>,
+    pub deserialized_clients: Vec<DeserializedClient>,
     pub allowed_ips: Vec<String>,
     database_path: String,
     plist_storage: String,
@@ -26,6 +26,17 @@ pub struct Backend {
 
     #[serde(skip)]
     pub heart: Arc<Mutex<Heart>>,
+
+    #[serde(skip)]
+    pub counter: Counter,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Counter {
+    pub launched: usize,
+    pub fetched: usize,
+    pub attached: usize,
+    pub uptime: Duration,
 }
 
 #[derive(Debug)]
@@ -49,6 +60,12 @@ impl Backend {
                     dmg_path: config.dmg_path.clone(),
                     pair_potential: vec![],
                     heart: Arc::new(Mutex::new(Heart::new())),
+                    counter: Counter {
+                        launched: 0,
+                        fetched: 0,
+                        attached: 0,
+                        uptime: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
+                    },
                 };
             }
         };
@@ -63,6 +80,12 @@ impl Backend {
             dmg_path: config.dmg_path.clone(),
             pair_potential: vec![],
             heart: Arc::new(Mutex::new(Heart::new())),
+            counter: Counter {
+                launched: 0,
+                fetched: 0,
+                attached: 0,
+                uptime: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
+            },
         }
     }
 
@@ -230,6 +253,17 @@ impl Backend {
                 self.pair_potential.remove(i);
             }
             i = i + 1;
+        }
+    }
+}
+
+impl Default for Counter {
+    fn default() -> Self {
+        Counter {
+            fetched: 0,
+            launched: 0,
+            attached: 0,
+            uptime: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
         }
     }
 }
