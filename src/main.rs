@@ -9,7 +9,10 @@ use log::{info, warn};
 use plist_plus::Plist;
 use serde_json::Value;
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
-use tokio::sync::{mpsc, Mutex};
+use tokio::{
+    sync::{mpsc, Mutex},
+    time::timeout,
+};
 use warp::{
     filters::BoxedFilter,
     http::Uri,
@@ -570,18 +573,30 @@ async fn attach_debugger(
 
     tokio::task::spawn_blocking(move || {
         match client.attach_debugger(pid) {
-            Ok(_) => {
-                tx.blocking_send(packets::attach_response(true, ""))
-                    .unwrap();
-            }
-            Err(e) => {
-                tx.blocking_send(packets::attach_response(false, &e))
-                    .unwrap();
-            }
+            Ok(_) => match tx.blocking_send(packets::attach_response(true, "")) {
+                Ok(_) => (),
+                Err(e) => warn!("Unable to send response: {}", e),
+            },
+            Err(e) => match tx.blocking_send(packets::attach_response(false, &e)) {
+                Ok(_) => (),
+                Err(e) => warn!("Unable to send response: {}", e),
+            },
         };
     });
 
-    Ok(rx.recv().await.unwrap())
+    match timeout(std::time::Duration::from_secs(60), rx.recv()).await {
+        Ok(x) => match x {
+            Some(x) => Ok(x),
+            None => Ok(packets::attach_response(false, "Timeout")),
+        },
+        Err(_) => {
+            warn!("Unable to receive response");
+            Ok(packets::attach_response(
+                false,
+                "Unable to receive response",
+            ))
+        }
+    }
 }
 
 async fn shortcuts_unregister(
