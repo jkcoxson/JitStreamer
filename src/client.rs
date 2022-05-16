@@ -265,8 +265,27 @@ impl Client {
         let debug_server = match device.new_debug_server("jitstreamer") {
             Ok(d) => d,
             Err(_) => {
-                warn!("Error creating debug server");
-                return Err("Unable to create debug server".to_string());
+                let path = match self.get_dmg_path() {
+                    Ok(p) => p,
+                    Err(_) => {
+                        (*self.heart.lock().unwrap()).kill(device.get_udid());
+                        return Err("Unable to get dmg path, the server was set up incorrectly!"
+                            .to_string());
+                    }
+                };
+                match Client::upload_dev_dmg(&device, &path) {
+                    Ok(_) => match device.new_debug_server("jitstreamer") {
+                        Ok(d) => d,
+                        Err(_) => {
+                            (*self.heart.lock().unwrap()).kill(device.get_udid());
+                            return Err("Unable to get debug server".to_string());
+                        }
+                    },
+                    Err(e) => {
+                        warn!("Error uploading dmg: {:?}", e);
+                        return Err("Unable to upload dmg".to_string());
+                    }
+                }
             }
         };
 
