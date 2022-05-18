@@ -3,8 +3,7 @@ A program to activate JIT across the far reaches of the internet
 
 This program runs on a Linux server and requires the following:
 - [rusty_libimobiledevice](https://github.com/jkcoxson/rusty_libimobiledevice)
-- (Optional) [JitStreamerSite](https://github.com/jkcoxson/JitStreamerSite)
-- A working Rust, Vue and C dev environment
+- A working Rust and C dev environment
 
 You do not need to build this software yourself, there is a public instance. 
 You can find support at the [Jit Streamer Discord server](https://imgur.com/rr9xJhX)
@@ -31,5 +30,5 @@ You can find support at the [Jit Streamer Discord server](https://imgur.com/rr9x
 ```
 - Set up your own VPN. For speed, I recommend [Wireguard](https://github.com/Nyr/wireguard-install). 
 For getting around firewalls, I recommend [OpenVPN](https://github.com/Nyr/openvpn-install). 
-if you can't open a port on your router, I recommend [ZeroTier](https://my.zerotier.com).
+If you can't open a port on your router, I recommend [ZeroTier](https://my.zerotier.com).
 - Run ``sudo ./target/release/jit_streamer``
