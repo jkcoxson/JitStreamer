@@ -289,7 +289,14 @@ impl Client {
             }
         };
 
-        let command = format!("vAttach;0000{:X}", pid);
+        let command = "vAttach;".to_string();
+
+        // The PID will consist of 8 hex digits, so we need to pad it with 0s
+        let pid = format!("{:X}", pid);
+        let zeroes = 8 - pid.len();
+        let pid = format!("{}{}", "0".repeat(zeroes), pid);
+        let command = format!("{}{}", command, pid);
+        info!("Sending command: {}", command);
 
         match debug_server.send_command(command.into()) {
             Ok(res) => info!("Successfully attached: {:?}", res),
