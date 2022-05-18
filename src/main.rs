@@ -572,16 +572,30 @@ async fn attach_debugger(
     let (tx, mut rx) = mpsc::channel(1);
 
     tokio::task::spawn_blocking(move || {
-        match client.attach_debugger(pid) {
-            Ok(_) => match tx.blocking_send(packets::attach_response(true, "")) {
-                Ok(_) => (),
-                Err(e) => warn!("Unable to send response: {}", e),
-            },
-            Err(e) => match tx.blocking_send(packets::attach_response(false, &e)) {
-                Ok(_) => (),
-                Err(e) => warn!("Unable to send response: {}", e),
-            },
-        };
+        let mut i = 5;
+        loop {
+            match client.attach_debugger(pid) {
+                Ok(_) => match tx.blocking_send(packets::attach_response(true, "")) {
+                    Ok(_) => break,
+                    Err(e) => {
+                        warn!("Unable to send response: {}", e);
+                        break;
+                    }
+                },
+                Err(e) => {
+                    if i == 0 {
+                        match tx.blocking_send(packets::attach_response(false, &e)) {
+                            Ok(_) => (),
+                            Err(e) => {
+                                warn!("Unable to send response: {}", e);
+                            }
+                        }
+                        break;
+                    }
+                    i -= 1;
+                }
+            };
+        }
     });
 
     match timeout(std::time::Duration::from_secs(60), rx.recv()).await {
