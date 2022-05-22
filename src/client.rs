@@ -302,6 +302,7 @@ impl Client {
             Ok(res) => info!("Successfully attached: {:?}", res),
             Err(e) => {
                 warn!("Error attaching: {:?}", e);
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("Unable to attach".to_string());
             }
         }
@@ -310,9 +311,12 @@ impl Client {
             Ok(res) => info!("Detaching: {:?}", res),
             Err(e) => {
                 warn!("Error detaching: {:?}", e);
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
                 return Err("Unable to detach".to_string());
             }
         }
+
+        (*self.heart.lock().unwrap()).kill(device.get_udid());
 
         Ok(())
     }
