@@ -64,7 +64,7 @@ impl Client {
             }
         };
 
-        let instproxy_client = match device.new_instproxy_client("jitstreamer".to_string()) {
+        let instproxy_client = match device.new_instproxy_client("jitstreamer") {
             Ok(instproxy) => instproxy,
             Err(e) => {
                 warn!("Error starting instproxy: {:?}", e);
@@ -73,11 +73,8 @@ impl Client {
             }
         };
         let client_opts = InstProxyClient::create_return_attributes(
-            vec![("ApplicationType".to_string(), Plist::new_string("Any"))],
-            vec![
-                "CFBundleIdentifier".to_string(),
-                "CFBundleDisplayName".to_string(),
-            ],
+            vec![("ApplicationType", Plist::new_string("Any"))],
+            vec!["CFBundleIdentifier", "CFBundleDisplayName"],
         );
         let lookup_results = match instproxy_client.lookup(vec![], Some(client_opts)) {
             Ok(apps) => apps,
@@ -101,7 +98,7 @@ impl Client {
             }
         };
 
-        let instproxy_client = match device.new_instproxy_client("idevicedebug".to_string()) {
+        let instproxy_client = match device.new_instproxy_client("idevicedebug") {
             Ok(instproxy) => instproxy,
             Err(e) => {
                 warn!("Error starting instproxy: {:?}", e);
@@ -110,12 +107,8 @@ impl Client {
             }
         };
         let client_opts = InstProxyClient::create_return_attributes(
-            vec![("ApplicationType".to_string(), Plist::new_string("Any"))],
-            vec![
-                "CFBundleIdentifier".to_string(),
-                "CFBundleExecutable".to_string(),
-                "Container".to_string(),
-            ],
+            vec![("ApplicationType", Plist::new_string("Any"))],
+            vec!["CFBundleIdentifier", "CFBundleExecutable", "Container"],
         );
         let lookup_results = match instproxy_client.lookup(vec![app.clone()], Some(client_opts)) {
             Ok(apps) => apps,
@@ -289,7 +282,7 @@ impl Client {
             }
         };
 
-        let command = "vAttach;".to_string();
+        let command = "vAttach;";
 
         // The PID will consist of 8 hex digits, so we need to pad it with 0s
         let pid = format!("{:X}", pid);
@@ -329,7 +322,7 @@ impl Client {
             }
         };
 
-        let lockdown_client = match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
+        let lockdown_client = match device.new_lockdownd_client("ideviceimagemounter") {
             Ok(lckd) => {
                 info!("Successfully connected to lockdownd");
                 lckd
@@ -340,14 +333,13 @@ impl Client {
             }
         };
 
-        let ios_version =
-            match lockdown_client.get_value("ProductVersion".to_string(), "".to_string()) {
-                Ok(ios_version) => ios_version.get_string_val().unwrap(),
-                Err(e) => {
-                    warn!("Error getting iOS version: {:?}", e);
-                    return Err("Unable to get iOS version".to_string());
-                }
-            };
+        let ios_version = match lockdown_client.get_value("ProductVersion", "") {
+            Ok(ios_version) => ios_version.get_string_val().unwrap(),
+            Err(e) => {
+                warn!("Error getting iOS version: {:?}", e);
+                return Err("Unable to get iOS version".to_string());
+            }
+        };
 
         info!("iOS version: {}", ios_version);
 
@@ -479,33 +471,31 @@ impl Client {
     }
 
     pub fn upload_dev_dmg(device: &Device, dmg_path: &String) -> Result<(), String> {
-        let mut lockdown_client =
-            match device.new_lockdownd_client("ideviceimagemounter".to_string()) {
-                Ok(lckd) => {
-                    info!("Successfully connected to lockdownd");
-                    lckd
-                }
-                Err(e) => {
-                    warn!("Error starting lockdown service: {:?}", e);
-                    return Err("Unable to start lockdown".to_string());
-                }
-            };
-
-        let service = match lockdown_client
-            .start_service("com.apple.mobile.mobile_image_mounter".to_string(), false)
-        {
-            Ok(service) => {
-                info!("Successfully started com.apple.mobile.mobile_image_mounter");
-                service
+        let mut lockdown_client = match device.new_lockdownd_client("ideviceimagemounter") {
+            Ok(lckd) => {
+                info!("Successfully connected to lockdownd");
+                lckd
             }
             Err(e) => {
-                warn!(
-                    "Error starting com.apple.mobile.mobile_image_mounter: {:?}",
-                    e
-                );
-                return Err("Unable to start com.apple.mobile.mobile_image_mounter".to_string());
+                warn!("Error starting lockdown service: {:?}", e);
+                return Err("Unable to start lockdown".to_string());
             }
         };
+
+        let service =
+            match lockdown_client.start_service("com.apple.mobile.mobile_image_mounter", false) {
+                Ok(service) => {
+                    info!("Successfully started com.apple.mobile.mobile_image_mounter");
+                    service
+                }
+                Err(e) => {
+                    warn!(
+                        "Error starting com.apple.mobile.mobile_image_mounter: {:?}",
+                        e
+                    );
+                    return Err("Unable to start com.apple.mobile.mobile_image_mounter".to_string());
+                }
+            };
 
         let mim = match device.new_mobile_image_mounter(&service) {
             Ok(mim) => {
@@ -525,8 +515,8 @@ impl Client {
         );
         match mim.upload_image(
             dmg_path.clone(),
-            "Developer".to_string(),
-            format!("{}.signature", dmg_path.clone()).to_string(),
+            "Developer",
+            format!("{}.signature", dmg_path.clone()),
         ) {
             Ok(_) => {
                 info!("Successfully uploaded image");
@@ -538,8 +528,8 @@ impl Client {
         }
         match mim.mount_image(
             dmg_path.clone(),
-            "Developer".to_string(),
-            format!("{}.signature", dmg_path.clone()).to_string(),
+            "Developer",
+            format!("{}.signature", dmg_path.clone()),
         ) {
             Ok(_) => {
                 info!("Successfully mounted image");

@@ -203,9 +203,9 @@ impl Backend {
                 return Err(());
             }
         };
-        let to_test = Device::new(udid.to_string(), true, Some(ip), 0).unwrap();
+        let to_test = Device::new(udid, true, Some(ip), 0).unwrap();
         // Start lockdownd
-        let _ = match to_test.new_lockdownd_client("test".to_string()) {
+        let _ = match to_test.new_lockdownd_client("test") {
             Ok(_) => return Ok(()),
             Err(e) => {
                 warn!("Error creating lockdownd client: {:?}", e);
