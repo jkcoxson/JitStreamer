@@ -11,7 +11,7 @@ use serde_json::Value;
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 use tokio::{
     sync::{mpsc, Mutex},
-    time::timeout,
+    time::timeout, io::AsyncWriteExt,
 };
 use warp::{
     filters::BoxedFilter,
@@ -26,6 +26,7 @@ mod client;
 mod config;
 mod heartbeat;
 mod packets;
+mod netmuxd;
 
 #[tokio::main]
 async fn main() {
@@ -114,6 +115,11 @@ async fn main() {
         .and(warp::filters::addr::remote())
         .and_then(move |code: u16, addr| attach_debugger(code, addr, attach_backend.clone()));
 
+    let netmuxd_route = warp::path("netmuxd")
+        .and(warp::post())
+        .and(warp::filters::addr::remote())
+        .and_then(move |addr| netmuxd_connect(addr, backend.clone()));
+
     // Assemble routes for service
     let routes = root_redirect()
         .or(warp::fs::dir(current_dir.join(static_dir)))
@@ -124,6 +130,7 @@ async fn main() {
         .or(list_apps_route)
         .or(shortcuts_launch_route)
         .or(attach_route)
+        .or(netmuxd_route)
         .or(version_route)
         .or(census_route)
         .or(unregister_route)
@@ -639,4 +646,100 @@ async fn shortcuts_unregister(
             ))
         }
     }
+}
+
+async fn netmuxd_connect(
+    addr: Option<SocketAddr>,
+    backend: Arc<Mutex<Backend>>,
+) -> Result<impl Reply, Rejection> {
+    let addr = match addr {
+        Some(addr) => addr,
+        None => {
+            warn!("No address provided");
+            return Ok("ok");
+        }
+    };
+    let mut backend = backend.lock().await;
+    if !backend.check_ip(&addr.to_string()) {
+        warn!("Address not allowed");
+        return Ok("ok");
+    }
+    let client = match backend.get_by_ip(&addr.to_string()) {
+        Some(client) => client,
+        None => {
+            warn!("No client found with the given IP");
+            return Ok("ok");
+        }
+    };
+    let udid = client.udid.clone();
+    let netmuxd_address = backend.netmuxd_address.clone();
+    drop(backend);
+
+    // Send the packet to netmuxd
+    let packet: Vec<u8> = match netmuxd::add_device_packet(addr.ip().to_string(), udid) {
+        Ok(packet) => packet.into(),
+        Err(_) => {
+            warn!("Unable to build netmuxd packet");
+            return Ok("ok");
+        }
+    };
+    
+    // Determine if the address is TCP or Unix
+    match netmuxd_address.parse::<std::net::SocketAddr>() {
+        Ok(addr) => {
+            let stream = match tokio::net::TcpStream::connect(addr).await {
+                Ok(stream) => stream,
+                Err(e) => {
+                    warn!("Unable to connect to netmuxd: {}", e);
+                    return Ok("ok");
+                }
+            };
+            // Send the packet
+            let mut stream = tokio::io::BufWriter::new(stream);
+            match stream.write_all(&packet).await {
+                Ok(_) => (),
+                Err(e) => {
+                    warn!("Unable to send packet to netmuxd: {}", e);
+                    return Ok("ok");
+                }
+            };
+            
+            match stream.flush().await {
+                Ok(_) => (),
+                Err(e) => {
+                    warn!("Unable to flush packet to netmuxd: {}", e);
+                    return Ok("ok");
+                }
+            };
+            
+        }
+        Err(_) => {
+            let stream = match tokio::net::UnixStream::connect(netmuxd_address).await {
+                Ok(stream) => stream,
+                Err(e) => {
+                    warn!("Unable to connect to netmuxd: {}", e);
+                    return Ok("ok");
+                }
+            };
+            // Send the packet
+            let mut stream = tokio::io::BufWriter::new(stream);
+            match stream.write_all(&packet).await {
+                Ok(_) => (),
+                Err(e) => {
+                    warn!("Unable to send packet to netmuxd: {}", e);
+                    return Ok("ok");
+                }
+            };
+            
+            match stream.flush().await {
+                Ok(_) => (),
+                Err(e) => {
+                    warn!("Unable to flush packet to netmuxd: {}", e);
+                    return Ok("ok");
+                }
+            };
+        }
+    };
+
+    return Ok("ok");
 }

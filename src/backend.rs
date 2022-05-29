@@ -20,6 +20,7 @@ pub struct Backend {
     database_path: String,
     plist_storage: String,
     pub dmg_path: String,
+    pub netmuxd_address: String,
 
     #[serde(skip)]
     pub pair_potential: Vec<PairPotential>,
@@ -58,6 +59,7 @@ impl Backend {
                     database_path: config.database_path.clone(),
                     plist_storage: config.plist_storage.clone(),
                     dmg_path: config.dmg_path.clone(),
+                    netmuxd_address: config.netmuxd_address.clone(),
                     pair_potential: vec![],
                     heart: Arc::new(Mutex::new(Heart::new())),
                     counter: Counter {
@@ -78,6 +80,7 @@ impl Backend {
             database_path: config.database_path.clone(),
             plist_storage: config.plist_storage.clone(),
             dmg_path: config.dmg_path.clone(),
+            netmuxd_address: config.netmuxd_address.clone(),
             pair_potential: vec![],
             heart: Arc::new(Mutex::new(Heart::new())),
             counter: Counter {

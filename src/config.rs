@@ -17,6 +17,7 @@ pub struct Config {
     pub dmg_path: String,
     pub altserver_path: String,
     pub allowed_ips: Vec<String>,
+    pub netmuxd_address: String,
 }
 
 impl Config {
@@ -47,6 +48,7 @@ impl Config {
             dmg_path: "/DeveloperDiskImages/".to_string(),
             altserver_path: "echo No alt server specified".to_string(),
             allowed_ips: vec!["127.0".to_string()],
+            netmuxd_address: "".to_string(),
         }
     }
 }
