@@ -40,6 +40,7 @@ impl From<RawPacket> for Vec<u8> {
 
 pub fn add_device_packet(ip: String, udid: String) -> Result<RawPacket, ()> {
     let mut plist = Plist::new_dict();
+    plist.dict_set_item("MessageType", "AddDevice".into())?;
     plist.dict_set_item("ConnectionType", "Network".into())?;
     plist.dict_set_item("ServiceName", "yurmom".into())?;
     plist.dict_set_item("DeviceID", udid.into())?;

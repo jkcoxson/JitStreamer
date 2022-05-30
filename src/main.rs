@@ -652,35 +652,45 @@ async fn netmuxd_connect(
     addr: Option<SocketAddr>,
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
+    info!("Device has sent request to connect to netmuxd");
     let addr = match addr {
         Some(addr) => addr,
         None => {
             warn!("No address provided");
-            return Ok("ok");
+            return Ok("Unable to get IP address");
         }
     };
     let mut backend = backend.lock().await;
     if !backend.check_ip(&addr.to_string()) {
         warn!("Address not allowed");
-        return Ok("ok");
+        return Ok("Address not allowed, connect to the VLAN");
     }
-    let client = match backend.get_by_ip(&addr.to_string()) {
+    let client = match backend.get_by_ip(&addr.ip().to_string()) {
         Some(client) => client,
         None => {
             warn!("No client found with the given IP");
-            return Ok("ok");
+            return Ok("No client found with the given IP, please register your device");
         }
     };
     let udid = client.udid.clone();
     let netmuxd_address = backend.netmuxd_address.clone();
     drop(backend);
 
+    // Determine if the muxer already contains the client
+    match rusty_libimobiledevice::idevice::get_device(udid.clone()) {
+        Ok(_) => {
+            info!("Device already connected to netmuxd");
+            return Ok("ok");
+        }
+        Err(_) => (),
+    }
+
     // Send the packet to netmuxd
     let packet: Vec<u8> = match netmuxd::add_device_packet(addr.ip().to_string(), udid) {
         Ok(packet) => packet.into(),
         Err(_) => {
             warn!("Unable to build netmuxd packet");
-            return Ok("ok");
+            return Ok("Unable to build netmuxd packet");
         }
     };
     
@@ -691,7 +701,7 @@ async fn netmuxd_connect(
                 Ok(stream) => stream,
                 Err(e) => {
                     warn!("Unable to connect to netmuxd: {}", e);
-                    return Ok("ok");
+                    return Ok("Unable to connect to netmuxd");
                 }
             };
             // Send the packet
@@ -700,7 +710,7 @@ async fn netmuxd_connect(
                 Ok(_) => (),
                 Err(e) => {
                     warn!("Unable to send packet to netmuxd: {}", e);
-                    return Ok("ok");
+                    return Ok("Unable to send packet to netmuxd");
                 }
             };
             
@@ -708,7 +718,7 @@ async fn netmuxd_connect(
                 Ok(_) => (),
                 Err(e) => {
                     warn!("Unable to flush packet to netmuxd: {}", e);
-                    return Ok("ok");
+                    return Ok("Unable to flush packet to netmuxd");
                 }
             };
             
@@ -718,7 +728,7 @@ async fn netmuxd_connect(
                 Ok(stream) => stream,
                 Err(e) => {
                     warn!("Unable to connect to netmuxd: {}", e);
-                    return Ok("ok");
+                    return Ok("Unable to connect to netmuxd");
                 }
             };
             // Send the packet
@@ -727,7 +737,7 @@ async fn netmuxd_connect(
                 Ok(_) => (),
                 Err(e) => {
                     warn!("Unable to send packet to netmuxd: {}", e);
-                    return Ok("ok");
+                    return Ok("Unable to send packet to netmuxd");
                 }
             };
             
@@ -735,7 +745,7 @@ async fn netmuxd_connect(
                 Ok(_) => (),
                 Err(e) => {
                     warn!("Unable to flush packet to netmuxd: {}", e);
-                    return Ok("ok");
+                    return Ok("Unable to flush packet to netmuxd");
                 }
             };
         }
