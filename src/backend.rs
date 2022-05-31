@@ -38,6 +38,7 @@ pub struct Counter {
     pub fetched: usize,
     pub attached: usize,
     pub uptime: Duration,
+    pub netmuxd: usize,
 }
 
 #[derive(Debug)]
@@ -66,6 +67,7 @@ impl Backend {
                         launched: 0,
                         fetched: 0,
                         attached: 0,
+                        netmuxd: 0,
                         uptime: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
                     },
                 };
@@ -87,6 +89,7 @@ impl Backend {
                 launched: 0,
                 fetched: 0,
                 attached: 0,
+                netmuxd: 0,
                 uptime: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
             },
         }
@@ -266,6 +269,7 @@ impl Default for Counter {
             fetched: 0,
             launched: 0,
             attached: 0,
+            netmuxd: 0,
             uptime: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
         }
     }

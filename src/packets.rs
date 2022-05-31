@@ -75,6 +75,7 @@ pub fn census_response(counter: Counter, clients: usize, version: String) -> Str
     packet["launched"] = serde_json::Value::Number(serde_json::Number::from(counter.launched));
     packet["attached"] = serde_json::Value::Number(serde_json::Number::from(counter.attached));
     packet["fetched"] = serde_json::Value::Number(serde_json::Number::from(counter.fetched));
+    packet["netmuxd"] = serde_json::Value::Number(serde_json::Number::from(counter.netmuxd));
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()

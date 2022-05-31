@@ -674,6 +674,9 @@ async fn netmuxd_connect(
     };
     let udid = client.udid.clone();
     let netmuxd_address = backend.netmuxd_address.clone();
+
+    backend.counter.netmuxd += 1;
+
     drop(backend);
 
     // Determine if the muxer already contains the client
