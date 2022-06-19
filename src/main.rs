@@ -10,8 +10,9 @@ use plist_plus::Plist;
 use serde_json::Value;
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 use tokio::{
+    io::AsyncWriteExt,
     sync::{mpsc, Mutex},
-    time::timeout, io::AsyncWriteExt,
+    time::timeout,
 };
 use warp::{
     filters::BoxedFilter,
@@ -25,8 +26,8 @@ mod backend;
 mod client;
 mod config;
 mod heartbeat;
-mod packets;
 mod netmuxd;
+mod packets;
 
 #[tokio::main]
 async fn main() {
@@ -48,6 +49,9 @@ async fn main() {
     let shortcuts_unregister_backend = backend.clone();
     let attach_backend = backend.clone();
     let census_backend = backend.clone();
+    let install_app_backend = backend.clone();
+
+    let cors = warp::cors().allow_any_origin();
 
     // Status route
     let status_route = warp::path("status")
@@ -73,7 +77,8 @@ async fn main() {
     let potential_route = warp::path("potential")
         .and(warp::get())
         .and(warp::filters::addr::remote())
-        .and_then(move |addr| potential_pair(addr, potential_backend.clone()));
+        .and_then(move |addr| potential_pair(addr, potential_backend.clone()))
+        .with(cors);
 
     // Potential follow up route
     let potential_follow_up_route = warp::path!("potential_follow_up" / u16)
@@ -120,6 +125,15 @@ async fn main() {
         .and(warp::filters::addr::remote())
         .and_then(move |addr| netmuxd_connect(addr, backend.clone()));
 
+    let install_app_route = warp::path!("install" / "app")
+        .and(warp::post())
+        .and(warp::filters::addr::remote())
+        .and(warp::body::content_length_limit(1024 * 1024 * 10))
+        .and(warp::body::bytes())
+        .and_then(move |addr, bytes: bytes::Bytes| {
+            install_app(addr, install_app_backend.clone(), bytes)
+        });
+
     // Assemble routes for service
     let routes = root_redirect()
         .or(warp::fs::dir(current_dir.join(static_dir)))
@@ -131,6 +145,7 @@ async fn main() {
         .or(shortcuts_launch_route)
         .or(attach_route)
         .or(netmuxd_route)
+        .or(install_app_route)
         .or(version_route)
         .or(census_route)
         .or(unregister_route)
@@ -696,7 +711,7 @@ async fn netmuxd_connect(
             return Ok("Unable to build netmuxd packet");
         }
     };
-    
+
     // Determine if the address is TCP or Unix
     match netmuxd_address.parse::<std::net::SocketAddr>() {
         Ok(addr) => {
@@ -716,7 +731,7 @@ async fn netmuxd_connect(
                     return Ok("Unable to send packet to netmuxd");
                 }
             };
-            
+
             match stream.flush().await {
                 Ok(_) => (),
                 Err(e) => {
@@ -724,7 +739,6 @@ async fn netmuxd_connect(
                     return Ok("Unable to flush packet to netmuxd");
                 }
             };
-            
         }
         Err(_) => {
             let stream = match tokio::net::UnixStream::connect(netmuxd_address).await {
@@ -743,7 +757,7 @@ async fn netmuxd_connect(
                     return Ok("Unable to send packet to netmuxd");
                 }
             };
-            
+
             match stream.flush().await {
                 Ok(_) => (),
                 Err(e) => {
@@ -755,4 +769,54 @@ async fn netmuxd_connect(
     };
 
     return Ok("ok");
+}
+
+async fn install_app(
+    addr: Option<SocketAddr>,
+    backend: Arc<Mutex<Backend>>,
+    ipa: bytes::Bytes,
+) -> Result<impl Reply, Rejection> {
+    info!("Device has sent request to install app");
+    let addr = match addr {
+        Some(addr) => addr,
+        None => {
+            warn!("No address provided");
+            return Ok(packets::install_response(false, "Unable to get IP address"));
+        }
+    };
+    let mut backend = backend.lock().await;
+    if !backend.check_ip(&addr.to_string()) {
+        warn!("Address not allowed");
+        return Ok(packets::install_response(
+            false,
+            "Address not allowed, connect to the VLAN",
+        ));
+    }
+    let client = match backend.get_by_ip(&addr.ip().to_string()) {
+        Some(client) => client,
+        None => {
+            warn!("No client found with the given IP");
+            return Ok(packets::install_response(
+                false,
+                "No client found with the given IP, please register your device",
+            ));
+        }
+    };
+
+    let (tx, mut rx) = mpsc::channel(1);
+
+    tokio::task::spawn_blocking(move || {
+        match client.install_app(ipa.to_vec()) {
+            Ok(_) => {
+                tx.blocking_send(packets::install_response(true, ""))
+                    .unwrap();
+            }
+            Err(e) => {
+                tx.blocking_send(packets::install_response(false, &e))
+                    .unwrap();
+            }
+        };
+    });
+
+    Ok(rx.recv().await.unwrap())
 }

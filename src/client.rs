@@ -314,6 +314,15 @@ impl Client {
         Ok(())
     }
 
+    pub fn install_app(&self, ipa: Vec<u8>) -> Result<(), String> {
+        let device = self.connect()?;
+
+        let inst = device.new_instproxy_client("jitstreamer")?;
+        
+        
+        todo!();
+    }
+
     pub fn get_ios_version(&self) -> Result<String, String> {
         let device = match self.connect() {
             Ok(device) => device,
