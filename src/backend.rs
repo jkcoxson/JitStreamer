@@ -130,7 +130,6 @@ impl Backend {
         self.deserialized_clients.push(DeserializedClient {
             ip,
             udid,
-            apps: vec![],
             last_seen: since_the_epoch.as_secs(),
         });
         self.save();
@@ -285,8 +284,6 @@ pub struct DeserializedClient {
     pub ip: String,
     /// The iDevice's UDID used to identify it.
     pub udid: String,
-    /// Will be used to automatically resign apps maybe someday.
-    pub apps: Vec<App>,
     /// If the device hasn't been seen in 28 days, it will be removed.
     pub last_seen: u64,
 }
@@ -306,10 +303,4 @@ impl DeserializedClient {
             heart,
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct App {
-    pub name: String,
-    pub bundle_id: String,
 }
