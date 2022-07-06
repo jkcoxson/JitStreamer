@@ -1,7 +1,6 @@
 // jkcoxson
 
-const DEFAULT: &str = r#"
-# JitStreamer Config File
+const DEFAULT: &str = r#"# JitStreamer Config File
 # Revision: A
 
 [paths]
@@ -46,7 +45,7 @@ allowed_subnet = "0.0.0.0/0"
 # The address that can be used to access netmuxd (uncomment to use)
 # This is a temporary option for use in SideStore
 # netmuxd_address = "127.0.0.1:27015"
-                        
+                      
 "#;
 
 use std::{fs::File, io::Write};
