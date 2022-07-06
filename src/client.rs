@@ -168,7 +168,7 @@ impl Client {
             }
         }
 
-        if debug_server.is_none() {
+        if !debug_server.is_none() {
             // Check to see if the image is mounted already
 
             let mim = match device.new_mobile_image_mounter("jitstreamer") {
@@ -192,7 +192,7 @@ impl Client {
                 }
             };
 
-            let images = match mim.lookup_image("") {
+            let images = match mim.lookup_image("Developer") {
                 Ok(images) => images,
                 Err(e) => {
                     warn!("Error looking up images: {:?}", e);
@@ -200,10 +200,25 @@ impl Client {
                     return Err("Unable to look up images".to_string());
                 }
             };
-            if images.array_get_size().unwrap() > 0 {
-                warn!("Image already mounted, failed to start debug server");
-                (*self.heart.lock().unwrap()).kill(device.get_udid());
-                return Err(START_DEBUG_SERVER.to_string());
+
+            match images.dict_get_item("ImageSignature") {
+                Ok(a) => match a.array_get_size() {
+                    Ok(n) => {
+                        if n > 0 {
+                            warn!("Image already mounted, failed to start debug server");
+                            (*self.heart.lock().unwrap()).kill(device.get_udid());
+                            return Err(START_DEBUG_SERVER.to_string());
+                        }
+                    }
+                    Err(_) => {
+                        (*self.heart.lock().unwrap()).kill(device.get_udid());
+                        return Err("Image plist in wrong format".to_string());
+                    }
+                },
+                Err(_) => {
+                    (*self.heart.lock().unwrap()).kill(device.get_udid());
+                    return Err("Image plist in wrong format".to_string());
+                }
             }
 
             let device = device.clone();

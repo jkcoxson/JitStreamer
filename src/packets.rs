@@ -16,10 +16,15 @@ pub fn status_packet(
     packet["validIp"] = serde_json::Value::Bool(valid_ip);
     packet["registered"] = serde_json::Value::Bool(registered);
     packet["mounting"] = serde_json::Value::Bool(mounting);
-    packet["mountMessage"] = serde_json::Value::String(match mount_message {
-        "" => "JitStreamer is still mounting your DMG, check back in a few minutes.".to_string(),
-        _ => mount_message.to_string(),
-    });
+    if mount_message.is_empty() {
+        packet["mountMessage"] = serde_json::Value::String(
+            "JitStreamer is still mounting your DMG, check back in a few minutes.".to_string(),
+        );
+        packet["mountFinished"] = serde_json::Value::Bool(false)
+    } else {
+        packet["mountMessage"] = serde_json::Value::String(mount_message.to_string());
+        packet["mountFinished"] = serde_json::Value::Bool(true)
+    }
     serde_json::to_string(&packet).unwrap()
 }
 

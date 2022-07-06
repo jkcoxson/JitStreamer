@@ -1,6 +1,6 @@
 // jkcoxson
 
-pub const SHORTCUT_VERSION: &str = "0.1.2";
+pub const SHORTCUT_VERSION: &str = "0.2.0";
 
 use backend::Backend;
 use bytes::BufMut;
@@ -311,7 +311,7 @@ async fn potential_pair(
             0,
         ));
     }
-    if !backend.check_ip(&addr.unwrap().to_string()) {
+    if !backend.check_ip(addr.unwrap().ip()) {
         return Ok(packets::potential_pair_response(
             false,
             "Invalid IP, join from the VLAN",
@@ -406,7 +406,7 @@ async fn status(
     if let None = addr {
         return Ok(packets::status_packet(false, false, false, ""));
     }
-    if !backend.check_ip(&addr.unwrap().to_string()) {
+    if !backend.check_ip(addr.unwrap().ip()) {
         return Ok(packets::status_packet(false, false, false, ""));
     }
     match backend.get_by_ip(&addr.unwrap().ip().to_string()) {
@@ -453,7 +453,7 @@ async fn list_apps(
             serde_json::Value::Object(serde_json::Map::new()),
         ));
     }
-    if !lock.check_ip(&addr.unwrap().to_string()) {
+    if !lock.check_ip(addr.unwrap().ip()) {
         warn!("Address not allowed");
         return Ok(packets::list_apps_response(
             false,
@@ -548,7 +548,7 @@ async fn shortcuts_run(
         warn!("No address provided");
         return Ok(packets::launch_response(false, "Unable to get IP address"));
     }
-    if !lock.check_ip(&addr.unwrap().to_string()) {
+    if !lock.check_ip(addr.unwrap().ip()) {
         warn!("Address not allowed");
         return Ok(packets::launch_response(
             false,
@@ -597,7 +597,7 @@ async fn attach_debugger(
         warn!("No address provided");
         return Ok(packets::attach_response(false, "Unable to get IP address"));
     }
-    if !backend.check_ip(&addr.unwrap().to_string()) {
+    if !backend.check_ip(addr.unwrap().ip()) {
         warn!("Address not allowed");
         return Ok(packets::attach_response(
             false,
@@ -672,7 +672,7 @@ async fn shortcuts_unregister(
         warn!("No address provided");
         return Ok(packets::launch_response(false, "Unable to get IP address"));
     }
-    if !backend.check_ip(&addr.unwrap().to_string()) {
+    if !backend.check_ip(addr.unwrap().ip()) {
         warn!("Address not allowed");
         return Ok(packets::unregister_response(
             false,
@@ -703,7 +703,7 @@ async fn netmuxd_connect(
         }
     };
     let mut backend = backend.lock().await;
-    if !backend.check_ip(&addr.to_string()) {
+    if !backend.check_ip(addr.ip()) {
         warn!("Address not allowed");
         return Ok("Address not allowed, connect to the VLAN");
     }
@@ -818,7 +818,7 @@ async fn install_app(
         }
     };
     let mut backend = backend.lock().await;
-    if !backend.check_ip(&addr.to_string()) {
+    if !backend.check_ip(addr.ip()) {
         warn!("Address not allowed");
         return Ok(packets::install_response(
             false,

@@ -109,8 +109,8 @@ impl Backend {
         std::io::Write::write_all(&mut file, contents.as_bytes()).unwrap();
     }
 
-    pub fn check_ip(&self, ip: &str) -> bool {
-        match iface_in_subnet(ip, &self.allowed_subnet) {
+    pub fn check_ip(&self, ip: IpAddr) -> bool {
+        match iface_in_subnet(&ip.to_string(), &self.allowed_subnet) {
             Ok(true) => true,
             Ok(false) => {
                 warn!("{} is not in the allowed subnet", ip);
