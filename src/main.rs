@@ -1,6 +1,6 @@
 // jkcoxson
 
-pub const VERSION: &str = "0.1.2";
+pub const SHORTCUT_VERSION: &str = "0.1.2";
 
 use backend::Backend;
 use bytes::BufMut;
@@ -198,7 +198,7 @@ fn root_redirect() -> BoxedFilter<(impl Reply,)> {
 }
 
 async fn version_route() -> Result<impl Reply, Rejection> {
-    Ok(VERSION)
+    Ok(SHORTCUT_VERSION)
 }
 
 async fn census(backend: Arc<Mutex<Backend>>) -> Result<impl Reply, Rejection> {
@@ -206,7 +206,7 @@ async fn census(backend: Arc<Mutex<Backend>>) -> Result<impl Reply, Rejection> {
     Ok(packets::census_response(
         lock.counter.clone(),
         lock.deserialized_clients.len(),
-        VERSION.to_string(),
+        SHORTCUT_VERSION.to_string(),
     ))
 }
 
