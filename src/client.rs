@@ -168,7 +168,7 @@ impl Client {
             }
         }
 
-        if !debug_server.is_none() {
+        if debug_server.is_none() {
             // Check to see if the image is mounted already
 
             let mim = match device.new_mobile_image_mounter("jitstreamer") {
