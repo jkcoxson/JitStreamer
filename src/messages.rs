@@ -8,6 +8,9 @@ Possible causes can include an invalid pairing file or a misbehaving device.
 Try restarting your device. If you still have this problem, unregister and re-register.
 Error:"#;
 
+pub const START_DEBUG_SERVER: &str = r#"Unable to start debug server. The device is misbehaving.
+Try restarting your device. If you still have this problem, unregister and re-register."#;
+
 pub const LOOKUP_APPS: &str = r#"Unable to lookup apps. This is a result of the device misbehaving.
 Restart your device and try again.
 Error:"#;

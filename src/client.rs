@@ -11,7 +11,7 @@ use std::{
 
 use crate::{
     heartbeat::Heart,
-    messages::{DETACH, LOOKUP_APPS, MOUNTING, START_INSTPROXY},
+    messages::{DETACH, LOOKUP_APPS, MOUNTING, START_DEBUG_SERVER, START_INSTPROXY},
 };
 
 pub struct Client {
@@ -165,6 +165,19 @@ impl Client {
         }
 
         if debug_server.is_none() {
+            // Check to see if the image is mounted already
+
+            let mim = match device.new_mobile_image_mounter("jitstreamer") {
+                Ok(mim) => {
+                    info!("Successfully started mobile_image_mounter");
+                    mim
+                }
+                Err(e) => {
+                    warn!("Error starting mobile_image_mounter: {:?}", e);
+                    return Err("Unable to start mobile_image_mounter".to_string());
+                }
+            };
+
             let path = match self.get_dmg_path() {
                 Ok(p) => p,
                 Err(_) => {
@@ -174,6 +187,21 @@ impl Client {
                     );
                 }
             };
+
+            let images = match mim.lookup_image("") {
+                Ok(images) => images,
+                Err(e) => {
+                    warn!("Error looking up images: {:?}", e);
+                    (*self.heart.lock().unwrap()).kill(device.get_udid());
+                    return Err("Unable to look up images".to_string());
+                }
+            };
+            if images.array_get_size().unwrap() > 0 {
+                warn!("Image already mounted, failed to start debug server");
+                (*self.heart.lock().unwrap()).kill(device.get_udid());
+                return Err(START_DEBUG_SERVER.to_string());
+            }
+
             let device = device.clone();
             let heart = self.heart.clone();
             tokio::task::spawn_blocking(move || {
@@ -480,33 +508,7 @@ impl Client {
     }
 
     pub fn upload_dev_dmg(device: &Device, dmg_path: &String) -> Result<(), String> {
-        let mut lockdown_client = match device.new_lockdownd_client("ideviceimagemounter") {
-            Ok(lckd) => {
-                info!("Successfully connected to lockdownd");
-                lckd
-            }
-            Err(e) => {
-                warn!("Error starting lockdown service: {:?}", e);
-                return Err("Unable to start lockdown".to_string());
-            }
-        };
-
-        let service =
-            match lockdown_client.start_service("com.apple.mobile.mobile_image_mounter", false) {
-                Ok(service) => {
-                    info!("Successfully started com.apple.mobile.mobile_image_mounter");
-                    service
-                }
-                Err(e) => {
-                    warn!(
-                        "Error starting com.apple.mobile.mobile_image_mounter: {:?}",
-                        e
-                    );
-                    return Err("Unable to start com.apple.mobile.mobile_image_mounter".to_string());
-                }
-            };
-
-        let mim = match device.new_mobile_image_mounter(&service) {
+        let mim = match device.new_mobile_image_mounter("jitstreamer") {
             Ok(mim) => {
                 info!("Successfully started mobile_image_mounter");
                 mim
