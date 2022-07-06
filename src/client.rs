@@ -9,7 +9,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::heartbeat::Heart;
+use crate::{
+    heartbeat::Heart,
+    messages::{DETACH, LOOKUP_APPS, MOUNTING, START_INSTPROXY},
+};
 
 pub struct Client {
     pub ip: String,
@@ -69,7 +72,7 @@ impl Client {
             Err(e) => {
                 warn!("Error starting instproxy: {:?}", e);
                 (*self.heart.lock().unwrap()).kill(device.get_udid());
-                return Err("Unable to start instproxy".to_string());
+                return Err(format!("{} {:?}", START_INSTPROXY, e));
             }
         };
         let client_opts = InstProxyClient::create_return_attributes(
@@ -81,7 +84,7 @@ impl Client {
             Err(e) => {
                 warn!("Error looking up apps: {:?}", e);
                 (*self.heart.lock().unwrap()).kill(device.get_udid());
-                return Err("Unable to lookup apps".to_string());
+                return Err(format!("{} {:?}", LOOKUP_APPS, e));
             }
         };
 
@@ -103,7 +106,7 @@ impl Client {
             Err(e) => {
                 warn!("Error starting instproxy: {:?}", e);
                 (*self.heart.lock().unwrap()).kill(device.get_udid());
-                return Err("Unable to start instproxy".to_string());
+                return Err(format!("{} {:?}", START_INSTPROXY, e));
             }
         };
         let client_opts = InstProxyClient::create_return_attributes(
@@ -115,7 +118,7 @@ impl Client {
             Err(e) => {
                 warn!("Error looking up apps: {:?}", e);
                 (*self.heart.lock().unwrap()).kill(device.get_udid());
-                return Err("Unable to lookup apps".to_string());
+                return Err(format!("{} {:?}", LOOKUP_APPS, e));
             }
         };
         let lookup_results = lookup_results.dict_get_item(&app).unwrap();
@@ -193,7 +196,7 @@ impl Client {
                 }
             });
 
-            return Err("JitStreamer is mounting your developer disk image. This should only take a minute or two, run this shortcut again in a bit. Keep your device on and connected.".to_string());
+            return Err(MOUNTING.to_string());
         }
         let debug_server = debug_server.unwrap();
 
@@ -244,7 +247,7 @@ impl Client {
             Err(e) => {
                 warn!("Error detaching: {:?}", e);
                 (*self.heart.lock().unwrap()).kill(device.get_udid());
-                return Err("Unable to detach".to_string());
+                return Err(DETACH.to_string());
             }
         }
 
@@ -365,10 +368,8 @@ impl Client {
         }
 
         let mut ios_dmg_url = None;
-        let dmg_libraries = [
-            "https://raw.githubusercontent.com/jkcoxson/JitStreamer/master/versions.json",
-            "https://cdn.altstore.io/file/altstore/altserver/developerdisks.json",
-        ];
+        let dmg_libraries =
+            ["https://raw.githubusercontent.com/jkcoxson/JitStreamer/master/versions.json"];
         for lib in dmg_libraries {
             if ios_dmg_url != None {
                 break;

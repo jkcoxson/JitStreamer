@@ -26,6 +26,7 @@ mod backend;
 mod client;
 mod config;
 mod heartbeat;
+mod messages;
 mod netmuxd;
 mod packets;
 
@@ -383,10 +384,7 @@ async fn potential_follow_up(
     match backend::Backend::test_new_client(&ip, &udid).await {
         Ok(_) => {}
         Err(_) => {
-            return Ok(packets::upload_response(
-                false,
-                "Device did not respond to pairing test",
-            ));
+            return Ok(packets::upload_response(false, messages::PAIRING_TEST));
         }
     }
     let mut lock = backend.lock().await;
