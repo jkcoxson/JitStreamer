@@ -9,19 +9,25 @@ default-run = "jit_streamer"
 
 [dependencies]
 tokio = { version = "*", features = [ "full" ] }
-warp = { version = "*", features = [ "tls" ] }
 futures = { version = "*" }
+
+warp = { version = "*", features = [ "tls" ] }
 bytes = { version = "*" }
+reqwest = { version = "*", features = [ "blocking" ] }
+
 serde = { version = "*", features = [ "derive" ] }
 serde_json = { version = "*" }
-rusty_libimobiledevice = { version = "*", path = "../rusty_libimobiledevice", features = [ "static", "vendored" ] }
-plist_plus = { version = "*", path= "../plist_plus", features = [ "static", "vendored" ] }
+
 dirs = { version = "*" }
-reqwest = { version = "*", features = [ "blocking" ] }
+rand = { version = "*" }
 zip = { version = "*" }
+
 log = { version = "*" }
 env_logger = { version = "*" }
-rand = { version = "*" }
+toml = { version = "*" }
+
+rusty_libimobiledevice = { version = "*", path = "../rusty_libimobiledevice", features = [ "static", "vendored" ] }
+plist_plus = { version = "*", path= "../plist_plus", features = [ "static", "vendored" ] }
 
 [[bin]]
 name = "pair"
