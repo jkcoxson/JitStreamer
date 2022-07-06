@@ -208,10 +208,11 @@ impl Client {
 
             let device = device.clone();
             let heart = self.heart.clone();
+            let mounts = self.mounts.clone();
             tokio::task::spawn_blocking(move || {
                 let mut i = 5;
                 loop {
-                    match Client::upload_dev_dmg(&device, &path) {
+                    match Client::upload_dev_dmg(&device, &path, mounts.clone()) {
                         Ok(_) => {
                             (*heart.lock().unwrap()).kill(device.get_udid());
                             break;
@@ -288,7 +289,11 @@ impl Client {
         Ok(())
     }
 
-    pub fn attach_debugger(&self, pid: u16) -> Result<(), String> {
+    pub fn attach_debugger(
+        &self,
+        pid: u16,
+        mounts: Arc<Mutex<HashMap<String, String>>>,
+    ) -> Result<(), String> {
         let device = self.connect()?;
         let debug_server = match device.new_debug_server("jitstreamer") {
             Ok(d) => d,
@@ -301,7 +306,7 @@ impl Client {
                             .to_string());
                     }
                 };
-                match Client::upload_dev_dmg(&device, &path) {
+                match Client::upload_dev_dmg(&device, &path, mounts) {
                     Ok(_) => match device.new_debug_server("jitstreamer") {
                         Ok(d) => d,
                         Err(_) => {
@@ -511,7 +516,16 @@ impl Client {
         Ok(format!("{}/{}.dmg", &self.dmg_path, ios_version))
     }
 
-    pub fn upload_dev_dmg(device: &Device, dmg_path: &String) -> Result<(), String> {
+    pub fn upload_dev_dmg(
+        device: &Device,
+        dmg_path: &String,
+        mounts: Arc<Mutex<HashMap<String, String>>>,
+    ) -> Result<(), String> {
+        // Add the device to mounts
+        if let Ok(mut mounts) = mounts.lock() {
+            mounts.insert(device.get_udid().clone(), "".to_string());
+        }
+
         let mim = match device.new_mobile_image_mounter("jitstreamer") {
             Ok(mim) => {
                 info!("Successfully started mobile_image_mounter");
@@ -519,6 +533,12 @@ impl Client {
             }
             Err(e) => {
                 warn!("Error starting mobile_image_mounter: {:?}", e);
+                if let Ok(mut mounts) = mounts.lock() {
+                    mounts.insert(
+                        device.get_udid().clone(),
+                        format!("Error starting mobile image mounter: {:?}", e),
+                    );
+                }
                 return Err("Unable to start mobile_image_mounter".to_string());
             }
         };
@@ -538,6 +558,12 @@ impl Client {
             }
             Err(e) => {
                 warn!("Error uploading image: {:?}", e);
+                if let Ok(mut mounts) = mounts.lock() {
+                    mounts.insert(
+                        device.get_udid().clone(),
+                        format!("Error uploading image: {:?}", e),
+                    );
+                }
                 return Err("Unable to upload developer disk image".to_string());
             }
         }
@@ -551,7 +577,19 @@ impl Client {
             }
             Err(e) => {
                 warn!("Error mounting image: {:?}", e);
+                if let Ok(mut mounts) = mounts.lock() {
+                    mounts.insert(
+                        device.get_udid().clone(),
+                        format!("Error mounting image: {:?}", e),
+                    );
+                }
                 return Err("Unable to mount developer disk image".to_string());
+            }
+        }
+        // Remove device from mounts
+        if let Ok(mut mounts) = mounts.lock() {
+            match mounts.remove(&device.get_udid()) {
+                _ => {}
             }
         }
         Ok(())

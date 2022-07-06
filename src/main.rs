@@ -665,6 +665,7 @@ async fn attach_debugger(
         }
     };
     backend.counter.attached += 1;
+    let mounts = backend.mounts.clone();
     drop(backend);
 
     let (tx, mut rx) = mpsc::channel(1);
@@ -672,7 +673,7 @@ async fn attach_debugger(
     tokio::task::spawn_blocking(move || {
         let mut i = 5;
         loop {
-            match client.attach_debugger(pid) {
+            match client.attach_debugger(pid, mounts.clone()) {
                 Ok(_) => match tx.blocking_send(packets::attach_response(true, "")) {
                     Ok(_) => break,
                     Err(e) => {
