@@ -1,5 +1,54 @@
 // jkcoxson
 
+const DEFAULT: &str = r#"
+# JitStreamer Config File
+# Revision: A
+
+[paths]
+# The path to host static content when a route is not matched
+# Useful for hosting sites along with JitStreamer
+static_path = "static"
+
+# The path to the database JSON file
+database_path = "database.json"
+
+# The path to the plist storage directory. This is different depending on the OS.
+# On Linux, this is /var/lib/lockdown. On macOS, this is /var/db/lockdown. 
+# On Windows, this is <username>\AppData\roaming\Apple Computer\Lockdown.
+plist_storage = "plist_storage"
+
+# The path on where to store downloaded DMG files
+# These files are used for mounting the iOS device, and are different depending on the version of iOS.
+dmg_path = "dmg_files"
+
+[web_server]
+# The port to run JitStreamer on
+port = 8080
+
+# The port to run JitStreamer on with SSL (uncomment to use)
+# ssl_port = 443
+
+# The host to bind JitStreamer to
+host = "0.0.0.0"
+
+# The path to the SSL certificate to use. Must be in place if using SSL port.
+# ssl_cert = "cert.pem"
+
+# The path to the SSL key to use. Must be in place if using SSL port.
+# ssl_key = "key.pem"
+
+[extra]
+# The IPs that are allowed to use JitStreamer.
+# This restricts the IPs that are allowed to use the JIT functionality
+# while allowing access to the site
+allowed_subnet = "0.0.0.0/0"
+
+# The address that can be used to access netmuxd (uncomment to use)
+# This is a temporary option for use in SideStore
+# netmuxd_address = "127.0.0.1:27015"
+                        
+"#;
+
 use std::{fs::File, io::Write};
 
 use serde::{Deserialize, Serialize};
@@ -50,55 +99,7 @@ impl Config {
                 match e.kind() {
                     std::io::ErrorKind::NotFound => {
                         println!("Creating default config file");
-                        let default = r#"
-                        # JitStreamer Config File
-                        # Revision: A
-
-                        [paths]
-                        # The path to host static content when a route is not matched
-                        # Useful for hosting sites along with JitStreamer
-                        static_path = "static"
-
-                        # The path to the database JSON file
-                        database_path = "database.json"
-
-                        # The path to the plist storage directory. This is different depending on the OS.
-                        # On Linux, this is /var/lib/lockdown. On macOS, this is /var/db/lockdown. 
-                        # On Windows, this is <username>\AppData\roaming\Apple Computer\Lockdown.
-                        plist_storage = "plist_storage"
-
-                        # The path on where to store downloaded DMG files
-                        # These files are used for mounting the iOS device, and are different depending on the version of iOS.
-                        dmg_path = "dmg_files"
-
-                        [webserver]
-                        # The port to run JitStreamer on
-                        port = 8080
-
-                        # The port to run JitStreamer on with SSL (uncomment to use)
-                        # ssl_port = 443
-
-                        # The host to bind JitStreamer to
-                        host = "localhost"
-
-                        # The path to the SSL certificate to use. Must be in place if using SSL port.
-                        # ssl_cert = "cert.pem"
-
-                        # The path to the SSL key to use. Must be in place if using SSL port.
-                        # ssl_key = "key.pem"
-
-                        [extra]
-                        # The IPs that are allowed to use JitStreamer.
-                        # This restricts the IPs that are allowed to use the JIT functionality
-                        # while allowing access to the site
-                        allowed_subnet = "0.0.0.0/0"
-
-                        # The address that can be used to access netmuxd (uncomment to use)
-                        # This is a temporary option for use in SideStore
-                        # netmuxd_address = "127.0.0.1:27015"
-
-                        "#
-                        .to_string();
+                        let default = DEFAULT.to_string();
                         let mut file = File::create(config_path).unwrap();
                         file.write_all(default.as_bytes()).unwrap();
                         Config::load()
