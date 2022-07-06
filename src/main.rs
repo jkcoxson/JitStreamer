@@ -468,7 +468,7 @@ async fn list_apps(
             warn!("No client found with the given IP");
             return Ok(packets::list_apps_response(
                 false,
-                "No client found with the given IP, please register your device",
+                "Your device is not registered with JitStreamer",
                 serde_json::Value::Object(serde_json::Map::new()),
                 serde_json::Value::Object(serde_json::Map::new()),
             ));
