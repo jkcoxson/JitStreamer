@@ -4,6 +4,7 @@ use log::{info, warn};
 use plist_plus::Plist;
 use rusty_libimobiledevice::{idevice::Device, services::instproxy::InstProxyClient};
 use std::{
+    collections::HashMap,
     net::IpAddr,
     str::FromStr,
     sync::{Arc, Mutex},
@@ -20,6 +21,7 @@ pub struct Client {
     pub pairing_file: String,
     pub dmg_path: String,
     pub heart: Arc<Mutex<Heart>>,
+    pub mounts: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl Client {
@@ -30,6 +32,7 @@ impl Client {
         pairing_file: String,
         dmg_path: String,
         heart: Arc<Mutex<Heart>>,
+        mounts: Arc<Mutex<HashMap<String, String>>>,
     ) -> Client {
         Client {
             ip,
@@ -37,6 +40,7 @@ impl Client {
             pairing_file,
             dmg_path,
             heart,
+            mounts,
         }
     }
 

@@ -5,6 +5,7 @@ use log::warn;
 use rand::Rng;
 use rusty_libimobiledevice::idevice::Device;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -31,6 +32,9 @@ pub struct Backend {
 
     #[serde(skip)]
     pub counter: Counter,
+
+    #[serde(skip)]
+    pub mounts: Arc<Mutex<HashMap<String, String>>>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -71,6 +75,7 @@ impl Backend {
                         netmuxd: 0,
                         uptime: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
                     },
+                    mounts: Arc::new(Mutex::new(HashMap::new())),
                 };
             }
         };
@@ -93,6 +98,7 @@ impl Backend {
                 netmuxd: 0,
                 uptime: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
             },
+            mounts: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -168,6 +174,7 @@ impl Backend {
                 &format!("{}/{}.plist", self.plist_storage, c.udid),
                 &self.dmg_path,
                 self.heart.clone(),
+                self.mounts.clone(),
             )),
             None => None,
         }
@@ -180,6 +187,7 @@ impl Backend {
                 &format!("{}/{}.plist", self.plist_storage, c.udid),
                 &self.dmg_path,
                 self.heart.clone(),
+                self.mounts.clone(),
             )),
             None => None,
         }
@@ -294,6 +302,7 @@ impl DeserializedClient {
         plist_path: &String,
         dmg_path: &String,
         heart: Arc<Mutex<Heart>>,
+        mounts: Arc<Mutex<HashMap<String, String>>>,
     ) -> Client {
         Client {
             ip: self.ip.clone(),
@@ -301,6 +310,7 @@ impl DeserializedClient {
             pairing_file: plist_path.to_string(),
             dmg_path: dmg_path.to_string(),
             heart,
+            mounts,
         }
     }
 }

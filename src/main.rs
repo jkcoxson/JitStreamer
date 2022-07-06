@@ -45,6 +45,7 @@ async fn main() {
     let potential_backend = backend.clone();
     let potential_follow_up_backend = backend.clone();
     let status_backend = backend.clone();
+    let mount_status_backend = backend.clone();
     let list_apps_backend = backend.clone();
     let shortcuts_launch_backend = backend.clone();
     let shortcuts_unregister_backend = backend.clone();
@@ -111,6 +112,11 @@ async fn main() {
         .and(warp::filters::addr::remote())
         .and_then(move |query, addr| shortcuts_run(query, addr, shortcuts_launch_backend.clone()));
 
+    let mount_status_route = warp::path("mount_status")
+        .and(warp::get())
+        .and(warp::filters::addr::remote())
+        .and_then(move |addr| mount_status(addr, mount_status_backend.clone()));
+
     let unregister_route = warp::path!("shortcuts" / "unregister")
         .and(warp::post())
         .and(warp::filters::addr::remote())
@@ -144,6 +150,7 @@ async fn main() {
         .or(potential_follow_up_route)
         .or(list_apps_route)
         .or(shortcuts_launch_route)
+        .or(mount_status_route)
         .or(attach_route)
         .or(netmuxd_route)
         .or(install_app_route)
@@ -561,6 +568,72 @@ async fn shortcuts_run(
     });
 
     Ok(rx.recv().await.unwrap())
+}
+
+async fn mount_status(
+    addr: Option<SocketAddr>,
+    backend: Arc<Mutex<Backend>>,
+) -> Result<impl Reply, Rejection> {
+    info!("Device mount status requested");
+    let mut lock = backend.lock().await;
+    if let None = addr {
+        warn!("No address provided");
+        return Ok(packets::mount_status_response(
+            false,
+            false,
+            "Unable to get IP address",
+        ));
+    }
+    if !lock.check_ip(&addr.unwrap().to_string()) {
+        warn!("Address not allowed");
+        return Ok(packets::mount_status_response(
+            false,
+            false,
+            "Address not allowed, connect to the VLAN",
+        ));
+    }
+    let client = match lock.get_by_ip(&addr.unwrap().ip().to_string()) {
+        Some(client) => client,
+        None => {
+            warn!("No client found with the given IP");
+            return Ok(packets::mount_status_response(
+                false,
+                false,
+                "No client found with the given IP, please register your device",
+            ));
+        }
+    };
+
+    // Determine if the device has an entry in mounts
+    let mounts = lock.mounts.clone();
+    let mut mounts = match mounts.lock() {
+        Ok(v) => v,
+        Err(e) => {
+            warn!("Unable to get mounts");
+            return Ok(packets::mount_status_response(
+                false,
+                false,
+                &format!("Unable to get mounts: {}, lock is poisoned", e).to_string(),
+            ));
+        }
+    };
+
+    if mounts.contains_key(&client.udid) {
+        drop(lock);
+        let message = mounts.get(&client.udid).unwrap();
+        if message != "" {
+            // Remove the entry from mounts
+            mounts.remove(&client.udid);
+        }
+        return Ok(packets::mount_status_response(
+            true,
+            true,
+            mounts.get(&client.udid).unwrap(),
+        ));
+    }
+
+    drop(lock);
+    Ok(packets::mount_status_response(true, false, ""))
 }
 
 async fn attach_debugger(
