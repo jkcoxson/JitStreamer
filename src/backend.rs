@@ -1,5 +1,6 @@
 // jkcoxson
 
+use ip_in_subnet::iface_in_subnet;
 use log::warn;
 use rand::Rng;
 use rusty_libimobiledevice::idevice::Device;
@@ -16,11 +17,11 @@ use crate::heartbeat::Heart;
 #[derive(Serialize, Deserialize)]
 pub struct Backend {
     pub deserialized_clients: Vec<DeserializedClient>,
-    pub allowed_ips: Vec<String>,
+    pub allowed_subnet: String,
     database_path: String,
     plist_storage: String,
     pub dmg_path: String,
-    pub netmuxd_address: String,
+    pub netmuxd_address: Option<String>,
 
     #[serde(skip)]
     pub pair_potential: Vec<PairPotential>,
@@ -50,17 +51,17 @@ pub struct PairPotential {
 impl Backend {
     /// Loads the database JSON file into memory.
     pub fn load(config: &Config) -> Backend {
-        let mut file = match std::fs::File::open(config.database_path.clone()) {
+        let mut file = match std::fs::File::open(config.paths.database_path.clone()) {
             Ok(file) => file,
             Err(_) => {
                 println!("Failed to open database file, using an empty database");
                 return Backend {
                     deserialized_clients: vec![],
-                    allowed_ips: config.allowed_ips.clone(),
-                    database_path: config.database_path.clone(),
-                    plist_storage: config.plist_storage.clone(),
-                    dmg_path: config.dmg_path.clone(),
-                    netmuxd_address: config.netmuxd_address.clone(),
+                    allowed_subnet: config.extra.allowed_subnet.clone(),
+                    database_path: config.paths.database_path.clone(),
+                    plist_storage: config.paths.plist_storage.clone(),
+                    dmg_path: config.paths.dmg_path.clone(),
+                    netmuxd_address: config.extra.netmuxd_address.clone(),
                     pair_potential: vec![],
                     heart: Arc::new(Mutex::new(Heart::new())),
                     counter: Counter {
@@ -78,11 +79,11 @@ impl Backend {
         let clients: Vec<DeserializedClient> = serde_json::from_str(&contents).unwrap();
         Backend {
             deserialized_clients: clients,
-            allowed_ips: config.allowed_ips.clone(),
-            database_path: config.database_path.clone(),
-            plist_storage: config.plist_storage.clone(),
-            dmg_path: config.dmg_path.clone(),
-            netmuxd_address: config.netmuxd_address.clone(),
+            allowed_subnet: config.extra.allowed_subnet.clone(),
+            database_path: config.paths.database_path.clone(),
+            plist_storage: config.paths.plist_storage.clone(),
+            dmg_path: config.paths.dmg_path.clone(),
+            netmuxd_address: config.extra.netmuxd_address.clone(),
             pair_potential: vec![],
             heart: Arc::new(Mutex::new(Heart::new())),
             counter: Counter {
@@ -103,15 +104,17 @@ impl Backend {
     }
 
     pub fn check_ip(&self, ip: &str) -> bool {
-        if self.allowed_ips.len() == 0 {
-            return true;
-        }
-        for allowed_ip in &self.allowed_ips {
-            if ip.starts_with(allowed_ip) {
-                return true;
+        match iface_in_subnet(ip, &self.allowed_subnet) {
+            Ok(true) => true,
+            Ok(false) => {
+                warn!("{} is not in the allowed subnet", ip);
+                false
+            }
+            Err(e) => {
+                warn!("{}", e);
+                false
             }
         }
-        false
     }
 
     pub fn register_client(&mut self, ip: String, udid: String) -> Result<(), ()> {

@@ -314,12 +314,11 @@ impl Client {
         Ok(())
     }
 
-    pub fn install_app(&self, ipa: Vec<u8>) -> Result<(), String> {
+    pub fn install_app(&self, _ipa: Vec<u8>) -> Result<(), String> {
         let device = self.connect()?;
 
-        let inst = device.new_instproxy_client("jitstreamer")?;
-        
-        
+        let _inst = device.new_instproxy_client("jitstreamer")?;
+
         todo!();
     }
 

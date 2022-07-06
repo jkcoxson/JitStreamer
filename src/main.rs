@@ -37,7 +37,7 @@ async fn main() {
     println!("Logger initialized");
 
     let config = config::Config::load();
-    let static_dir = config.static_path.clone();
+    let static_dir = config.paths.static_path.clone();
     let current_dir = std::env::current_dir().expect("failed to read current directory");
     let backend = Arc::new(Mutex::new(backend::Backend::load(&config)));
     let upload_backend = backend.clone();
@@ -152,19 +152,24 @@ async fn main() {
         .or(admin_route);
     let ssl_routes = routes.clone();
 
-    let addr: std::net::SocketAddr = format!("{}:{}", config.host, config.port)
-        .parse()
-        .expect("Invalid address");
-    if config.ssl_port.is_some() {
-        let addr: std::net::SocketAddr = format!("{}:{}", config.host, config.ssl_port.unwrap())
+    let addr: std::net::SocketAddr =
+        format!("{}:{}", config.web_server.host, config.web_server.port)
             .parse()
             .expect("Invalid address");
+    if config.web_server.ssl_port.is_some() {
+        let addr: std::net::SocketAddr = format!(
+            "{}:{}",
+            config.web_server.host,
+            config.web_server.ssl_port.unwrap()
+        )
+        .parse()
+        .expect("Invalid address");
         println!("Hosting with HTTPS");
         tokio::spawn(async move {
             warp::serve(ssl_routes)
                 .tls()
-                .cert_path(config.ssl_cert.unwrap())
-                .key_path(config.ssl_key.unwrap())
+                .cert_path(config.web_server.ssl_cert.unwrap())
+                .key_path(config.web_server.ssl_key.unwrap())
                 .run(addr)
                 .await;
         });
@@ -689,6 +694,12 @@ async fn netmuxd_connect(
     };
     let udid = client.udid.clone();
     let netmuxd_address = backend.netmuxd_address.clone();
+
+    if netmuxd_address.is_none() {
+        warn!("No netmuxd address provided");
+        return Ok("No netmuxd address provided");
+    }
+    let netmuxd_address = netmuxd_address.unwrap();
 
     backend.counter.netmuxd += 1;
 
