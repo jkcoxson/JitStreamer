@@ -10,8 +10,13 @@ You can find support at the [JitStreamer Discord server](https://imgur.com/rr9xJ
 
 # Building
 **Note:** These are rough building instructions for Linux
-- Follow the instructions on [rusty_libimobiledevice](https://github.com/jkcoxson/rusty_libimobiledevice) to build the required dependency.
-- Follow the instructions on [plist_plus](https://github.com/jkcoxson/plist_plus) to build the required dependency.
+- Install the following software:
+    - git
+    - autoconf
+    - automake
+    - libtool
+    - pkg-config
+    - build-essential
 - Clone the repository and run ``cargo build --release``
 
 # Usage

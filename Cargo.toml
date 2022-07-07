@@ -27,8 +27,8 @@ zip = { version = "*" }
 log = { version = "*" }
 env_logger = { version = "*" }
 
-rusty_libimobiledevice = { version = "*", path = "../rusty_libimobiledevice", features = [ "static", "vendored" ] }
-plist_plus = { version = "*", path= "../plist_plus", features = [ "static", "vendored" ] }
+rusty_libimobiledevice = { version = "*", features = [ "static", "vendored" ] }
+plist_plus = { version = "*", features = [ "static", "vendored" ] }
 
 [[bin]]
 name = "pair"
