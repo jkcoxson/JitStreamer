@@ -216,7 +216,7 @@ impl Backend {
                 return Err(());
             }
         };
-        let to_test = Device::new(udid, true, Some(ip), 0).unwrap();
+        let to_test = Device::new(udid, Some(ip), 0);
         // Start lockdownd
         let res = match to_test.new_lockdownd_client("test") {
             Ok(_) => Ok(()),

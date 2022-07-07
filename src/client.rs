@@ -54,7 +54,7 @@ impl Client {
                 return Err("Unable to parse ip".to_string());
             }
         };
-        let device = Device::new(self.udid.clone(), true, Some(ip), 0).unwrap();
+        let device = Device::new(self.udid.clone(), Some(ip), 0);
         info!("Starting heartbeat {}", self.udid);
 
         // Start heartbeat
