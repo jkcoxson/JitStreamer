@@ -10,9 +10,9 @@ fn main() {
     let mut args: Vec<String> = std::env::args().collect();
 
     // Correct for Windows
-    for i in 0..args.len() {
-        if args[i].contains("—") {
-            args[i] = args[i].replace("—", "-"); // yes these are different
+    for i in args.iter_mut() {
+        if i.contains('—') {
+            *i = i.replace('—', "-"); // yes these are different
         }
     }
 
@@ -33,7 +33,7 @@ fn main() {
         if args[i] == "-v" || args[i] == "--version" {
             println!("Pair version {}", VERSION);
         }
-        i = i + 1;
+        i += 1;
     }
     // Wait until a device is connected by USB
     let mut device = None;
@@ -46,7 +46,7 @@ fn main() {
                 return;
             }
         };
-        if devices.len() == 0 {
+        if devices.is_empty() {
             println!("Please connect your device via USB and try again.");
             println!("If your device is connected, check the cable and make sure iTunes is running if on Windows");
             wait_for_enter();
