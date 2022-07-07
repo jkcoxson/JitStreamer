@@ -6,7 +6,7 @@ This program runs on a Linux server and requires the following:
 - A working Rust and C dev environment
 
 You do not need to build this software yourself, there is a public instance. 
-You can find support at the [Jit Streamer Discord server](https://imgur.com/rr9xJhX)
+You can find support at the [JitStreamer Discord server](https://imgur.com/rr9xJhX)
 
 # Building
 **Note:** These are rough building instructions for Linux
@@ -15,20 +15,11 @@ You can find support at the [Jit Streamer Discord server](https://imgur.com/rr9x
 - Clone the repository and run ``cargo build --release``
 
 # Usage
-- Create a config file in your currect running directory with something like this:
-```json
-{
-    "port": 80,
-    "host": "0.0.0.0",
-    "static_path": "",
-    "database_path": "./database.json",
-    "plist_storage": "/var/lib/lockdown", // This is different depending on your OS
-    "dmg_path": "/DMG",
-    "altserver_path": "", 
-    "allowed_ips": []
-}
-```
+- Run JitStreamer and it will create an initial config file. Edit it with a text editor.
 - Set up your own VPN. For speed, I recommend [Wireguard](https://github.com/Nyr/wireguard-install). 
 For getting around firewalls, I recommend [OpenVPN](https://github.com/Nyr/openvpn-install). 
 If you can't open a port on your router, I recommend [ZeroTier](https://my.zerotier.com).
 - Run ``sudo ./target/release/jit_streamer``
+
+# Bug Reporting
+- Run with the environment variable ``RUST_LOG=info`` to see debug information.
