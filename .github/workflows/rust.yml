@@ -20,17 +20,8 @@ jobs:
       run: cargo clippy -- -D warnings
     - name: Build them files for x86_64-unknown-linux-gnu
       run: RUSTFLAGS="-C target-feature=+crt-static" cargo build --target x86_64-unknown-linux-gnu --release --verbose
-
-    - name: Install the aarch64-unknown-linux-gnu target
-      run: rustup target add aarch64-unknown-linux-gnu
-    - name: Build them files for aarch64-unknown-linux-gnu
-      run: RUSTFLAGS="-C target-feature=+crt-static" cargo build --target aarch64-unknown-linux-gnu --release --verbose
-    - name: Install the Binbows target
-      run: rustup target add x86_64-pc-windows-gnu
-    - name: Build them files for Michaelsoft Binbows
-      run: RUSTFLAGS="-C target-feature=+crt-static" cargo build --target x86_64-pc-windows-gnu --release --verbose
     - name: Assemble the files like the Avengers
-      run: mkdir output && mv target/x86_64-unknown-linux-gnu/release/jit_streamer output/jit_streamer-x86_64-unknown-linux-gnu && mv target/x86_64-unknown-linux-gnu/release/pair output/pair-x86_64-unknown-linux-gnu && mv target/aarch64-unknown-linux-gnu/release/jit_streamer output/jit_streamer-aarch64-unknown-linux-gnu && mv target/aarch64-unknown-linux-gnu/release/pair output/pair-aarch64-unknown-linux-gnu && mv target/x86_64-pc-windows-gnu/release/jit_streamer.exe output/jit_streamer-x86_64-pc-windows-gnu.exe && mv target/x86_64-pc-windows-gnu/release/pair.exe output/pair-x86_64-pc-windows-gnu.exe
+      run: mkdir output && mv target/x86_64-unknown-linux-gnu/release/jit_streamer output/jit_streamer-x86_64-unknown-linux-gnu && mv target/x86_64-unknown-linux-gnu/release/pair output/pair-x86_64-unknown-linux-gnu
     - name: Yeet them to the cloud
       uses: actions/upload-artifact@v3.1.0
       with:
