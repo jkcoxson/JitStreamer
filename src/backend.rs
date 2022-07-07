@@ -145,22 +145,20 @@ impl Backend {
     pub fn unregister_client(&mut self, ip: String) -> Result<(), ()> {
         if let Some(client) = self.get_by_ip(&ip) {
             // Delete pairing file
-            match std::fs::remove_file(format!("/var/lib/lockdown/{}.plist", client.udid)) {
-                _ => {}
-            }
+            let _ = std::fs::remove_file(format!("/var/lib/lockdown/{}.plist", client.udid));
 
             // Remove from database
             let mut i = 0;
             while i < self.deserialized_clients.len() {
-                if &self.deserialized_clients[i].ip == &ip {
+                if self.deserialized_clients[i].ip == ip {
                     self.deserialized_clients.remove(i);
                 }
-                i = i + 1;
+                i += 1;
             }
             self.save();
-            return Ok(());
+            Ok(())
         } else {
-            return Err(());
+            Err(())
         }
     }
 
@@ -182,15 +180,14 @@ impl Backend {
 
     pub fn _get_by_udid(&self, udid: &str) -> Option<Client> {
         let res = self.deserialized_clients.iter().find(|c| c.udid == udid);
-        match res {
-            Some(c) => Some(c.to_client(
+        res.map(|c| {
+            c.to_client(
                 &format!("{}/{}.plist", self.plist_storage, c.udid),
                 &self.dmg_path,
                 self.heart.clone(),
                 self.mounts.clone(),
-            )),
-            None => None,
-        }
+            )
+        })
     }
 
     pub fn write_pairing_file(&self, plist: String, udid: &String) -> Result<(), ()> {
@@ -221,18 +218,20 @@ impl Backend {
         };
         let to_test = Device::new(udid, true, Some(ip), 0).unwrap();
         // Start lockdownd
-        let _ = match to_test.new_lockdownd_client("test") {
-            Ok(_) => return Ok(()),
+        let res = match to_test.new_lockdownd_client("test") {
+            Ok(_) => Ok(()),
             Err(e) => {
                 warn!("Error creating lockdownd client: {:?}", e);
-                return Err(());
+                Err(())
             }
         };
+
+        res
     }
 
     pub fn prefered_app(name: &str) -> bool {
         let app_list = include_str!("known_apps.txt").to_string();
-        let apps: Vec<&str> = app_list.split("\n").collect();
+        let apps: Vec<&str> = app_list.split('\n').collect();
         for app in apps {
             if name.contains(app) {
                 return true;
@@ -257,7 +256,7 @@ impl Backend {
                 let ip = self.pair_potential[i].ip.clone();
                 return Some(ip);
             }
-            i = i + 1;
+            i += 1;
         }
         None
     }
@@ -268,7 +267,7 @@ impl Backend {
             if self.pair_potential[i].code == code {
                 self.pair_potential.remove(i);
             }
-            i = i + 1;
+            i += 1;
         }
     }
 }

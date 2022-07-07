@@ -270,7 +270,7 @@ impl Client {
             }
         }
 
-        match debug_server.set_argv(vec![bundle_path.clone(), bundle_path.clone()]) {
+        match debug_server.set_argv(vec![bundle_path.clone(), bundle_path]) {
             Ok(res) => {
                 info!("Successfully set argv: {:?}", res);
             }
@@ -443,10 +443,9 @@ impl Client {
             // Parse versions.json
             let versions: serde_json::Value = serde_json::from_str(&contents).unwrap();
             // Get DMG url
-            ios_dmg_url = match versions.get(ios_version.clone()) {
-                Some(x) => Some(x.as_str().unwrap().to_string()),
-                None => None,
-            };
+            ios_dmg_url = versions
+                .get(ios_version.clone())
+                .map(|x| x.as_str().unwrap().to_string());
         }
 
         if ios_dmg_url == None {
@@ -454,7 +453,7 @@ impl Client {
         }
 
         // Download DMG zip
-        info!("Downloading iOS {} DMG...", ios_version.clone());
+        info!("Downloading iOS {} DMG...", ios_version);
         let resp = match reqwest::blocking::get(ios_dmg_url.unwrap()) {
             Ok(resp) => resp,
             Err(_) => {
@@ -538,7 +537,7 @@ impl Client {
     ) -> Result<(), String> {
         // Add the device to mounts
         if let Ok(mut mounts) = mounts.lock() {
-            mounts.insert(device.get_udid().clone(), "".to_string());
+            mounts.insert(device.get_udid(), "".to_string());
         }
 
         let mim = match device.new_mobile_image_mounter("jitstreamer") {
@@ -550,7 +549,7 @@ impl Client {
                 warn!("Error starting mobile_image_mounter: {:?}", e);
                 if let Ok(mut mounts) = mounts.lock() {
                     mounts.insert(
-                        device.get_udid().clone(),
+                        device.get_udid(),
                         format!("Error starting mobile image mounter: {:?}", e),
                     );
                 }
@@ -559,10 +558,7 @@ impl Client {
         };
 
         info!("Uploading DMG from: {}", dmg_path);
-        info!(
-            "signature: {}",
-            format!("{}.signature", dmg_path.clone()).to_string()
-        );
+        info!("signature: {}", format!("{}.signature", dmg_path.clone()));
         match mim.upload_image(
             dmg_path.clone(),
             "Developer",
@@ -574,10 +570,7 @@ impl Client {
             Err(e) => {
                 warn!("Error uploading image: {:?}", e);
                 if let Ok(mut mounts) = mounts.lock() {
-                    mounts.insert(
-                        device.get_udid().clone(),
-                        format!("Error uploading image: {:?}", e),
-                    );
+                    mounts.insert(device.get_udid(), format!("Error uploading image: {:?}", e));
                 }
                 return Err("Unable to upload developer disk image".to_string());
             }
@@ -593,19 +586,14 @@ impl Client {
             Err(e) => {
                 warn!("Error mounting image: {:?}", e);
                 if let Ok(mut mounts) = mounts.lock() {
-                    mounts.insert(
-                        device.get_udid().clone(),
-                        format!("Error mounting image: {:?}", e),
-                    );
+                    mounts.insert(device.get_udid(), format!("Error mounting image: {:?}", e));
                 }
                 return Err("Unable to mount developer disk image".to_string());
             }
         }
         // Remove device from mounts
         if let Ok(mut mounts) = mounts.lock() {
-            match mounts.remove(&device.get_udid()) {
-                _ => {}
-            }
+            let _ = mounts.remove(&device.get_udid());
         }
         Ok(())
     }

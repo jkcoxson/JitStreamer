@@ -93,7 +93,7 @@ async fn main() {
     // Version route
     let version_route = warp::path("version")
         .and(warp::get())
-        .and_then(|| version_route());
+        .and_then(version_route);
 
     // Census route
     let census_route = warp::path("census")
@@ -186,7 +186,7 @@ fn root_redirect() -> BoxedFilter<(impl Reply,)> {
 
             // do not redirect if the path ends in a trailing slash
             // or contains a period (indicating a specific file, e.g. style.css)
-            if path.ends_with("/") || path.contains(".") {
+            if path.ends_with('/') || path.contains('.') {
                 return Err(warp::reject());
             }
 
@@ -296,7 +296,7 @@ async fn upload_file(
             return Ok(packets::upload_response(true, ""));
         }
     }
-    return Ok(packets::upload_response(false, "No file found"));
+    Ok(packets::upload_response(false, "No file found"))
 }
 
 async fn potential_pair(
@@ -304,7 +304,7 @@ async fn potential_pair(
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
     let mut backend = backend.lock().await;
-    if let None = addr {
+    if addr.is_none() {
         return Ok(packets::potential_pair_response(
             false,
             "No address provided",
@@ -344,7 +344,7 @@ async fn potential_follow_up(
             return Ok(packets::potential_follow_up_response(false, "Invalid code"));
         }
     }
-    .split(":")
+    .split(':')
     .next()
     .unwrap()
     .to_string();
@@ -395,7 +395,7 @@ async fn potential_follow_up(
         }
     }
     lock.remove_code(code);
-    return Ok(packets::upload_response(true, ""));
+    Ok(packets::upload_response(true, ""))
 }
 
 async fn status(
@@ -403,7 +403,7 @@ async fn status(
     backend: Arc<Mutex<Backend>>,
 ) -> Result<impl Reply, Rejection> {
     let mut backend = backend.lock().await;
-    if let None = addr {
+    if addr.is_none() {
         return Ok(packets::status_packet(false, false, false, ""));
     }
     if !backend.check_ip(addr.unwrap().ip()) {
@@ -427,15 +427,13 @@ async fn status(
                         // Remove it from the HashMap
                         mounts.remove(&client.udid);
                     }
-                    return Ok(packets::status_packet(true, true, true, &m));
+                    Ok(packets::status_packet(true, true, true, &m))
                 }
-                None => {
-                    return Ok(packets::status_packet(true, true, false, ""));
-                }
+                None => Ok(packets::status_packet(true, true, false, "")),
             }
         }
-        None => return Ok(packets::status_packet(true, false, false, "")),
-    };
+        None => Ok(packets::status_packet(true, false, false, "")),
+    }
 }
 
 async fn list_apps(
@@ -444,7 +442,7 @@ async fn list_apps(
 ) -> Result<impl Reply, Rejection> {
     info!("Device list requested");
     let mut lock = backend.lock().await;
-    if let None = addr {
+    if addr.is_none() {
         warn!("No address provided");
         return Ok(packets::list_apps_response(
             false,
@@ -485,7 +483,7 @@ async fn list_apps(
                 warn!("Unable to get apps");
                 tx.blocking_send(Err(packets::list_apps_response(
                     false,
-                    &format!("Unable to get apps: {}", e).to_string(),
+                    &format!("Unable to get apps: {}", e),
                     serde_json::Value::Object(serde_json::Map::new()),
                     serde_json::Value::Object(serde_json::Map::new()),
                 )))
@@ -544,7 +542,7 @@ async fn shortcuts_run(
 ) -> Result<impl Reply, Rejection> {
     info!("Device has sent request to launch {}", app);
     let mut lock = backend.lock().await;
-    if let None = addr {
+    if addr.is_none() {
         warn!("No address provided");
         return Ok(packets::launch_response(false, "Unable to get IP address"));
     }
@@ -593,7 +591,7 @@ async fn attach_debugger(
 ) -> Result<impl Reply, Rejection> {
     info!("Device has sent request to attach to process {}", pid);
     let mut backend = backend.lock().await;
-    if let None = addr {
+    if addr.is_none() {
         warn!("No address provided");
         return Ok(packets::attach_response(false, "Unable to get IP address"));
     }
@@ -668,7 +666,7 @@ async fn shortcuts_unregister(
 ) -> Result<impl Reply, Rejection> {
     info!("Device has sent request unregister");
     let mut backend = backend.lock().await;
-    if let None = addr {
+    if addr.is_none() {
         warn!("No address provided");
         return Ok(packets::launch_response(false, "Unable to get IP address"));
     }
@@ -680,13 +678,11 @@ async fn shortcuts_unregister(
         ));
     }
     match backend.unregister_client(addr.unwrap().ip().to_string()) {
-        Ok(_) => return Ok(packets::unregister_response(true, "")),
-        Err(_) => {
-            return Ok(packets::unregister_response(
-                false,
-                "Device not found in database",
-            ))
-        }
+        Ok(_) => Ok(packets::unregister_response(true, "")),
+        Err(_) => Ok(packets::unregister_response(
+            false,
+            "Device not found in database",
+        )),
     }
 }
 
@@ -728,12 +724,9 @@ async fn netmuxd_connect(
     drop(backend);
 
     // Determine if the muxer already contains the client
-    match rusty_libimobiledevice::idevice::get_device(udid.clone()) {
-        Ok(_) => {
-            info!("Device already connected to netmuxd");
-            return Ok("ok");
-        }
-        Err(_) => (),
+    if rusty_libimobiledevice::idevice::get_device(udid.clone()).is_ok() {
+        info!("Device already connected to netmuxd");
+        return Ok("ok");
     }
 
     // Send the packet to netmuxd
@@ -801,7 +794,7 @@ async fn netmuxd_connect(
         }
     };
 
-    return Ok("ok");
+    Ok("ok")
 }
 
 async fn install_app(

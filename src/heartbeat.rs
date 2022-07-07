@@ -7,16 +7,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[derive(Default)]
 pub struct Heart {
     devices: HashMap<String, Arc<Mutex<bool>>>,
-}
-
-impl Default for Heart {
-    fn default() -> Self {
-        Heart {
-            devices: HashMap::new(),
-        }
-    }
 }
 
 impl Heart {
@@ -40,7 +33,7 @@ impl Heart {
         let udid = client.get_udid();
 
         // Insert the mutex into the hashmap
-        self.devices.insert(udid.clone(), mutex.clone());
+        self.devices.insert(udid, mutex.clone());
 
         // Start the heartbeat
         for i in 0..1 {
@@ -92,7 +85,7 @@ fn heartbeat_loop(heartbeat_client: HeartbeatClient, stopper: Arc<Mutex<bool>>) 
                 break;
             }
         }
-        if stopper.lock().unwrap().clone() {
+        if *stopper.lock().unwrap() {
             info!("We have been instructed to die");
             return;
         }
