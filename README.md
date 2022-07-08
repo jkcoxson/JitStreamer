@@ -19,11 +19,11 @@ You can find support at the [JitStreamer Discord server](https://imgur.com/rr9xJ
     - build-essential
 - Clone the repository and run ``cargo build --release``
 
+macOS Hosting Instructions: 
+
 # Usage
 - Run JitStreamer and it will create an initial config file. Edit it with a text editor.
-- Set up your own VPN. For speed, I recommend [Wireguard](https://github.com/Nyr/wireguard-install). 
-For getting around firewalls, I recommend [OpenVPN](https://github.com/Nyr/openvpn-install). 
-If you can't open a port on your router, I recommend [ZeroTier](https://my.zerotier.com).
+- Set up your own VPN. TailScale is recommended for most users as it requires minimal setup. Otherwise use options like WireGuard, OpenVPN, or ZeroTier.
 - Run ``sudo ./target/release/jit_streamer``
 
 # Bug Reporting
