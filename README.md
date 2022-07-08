@@ -19,7 +19,7 @@ You can find support at the [JitStreamer Discord server](https://imgur.com/rr9xJ
     - build-essential
 - Clone the repository and run ``cargo build --release``
 
-macOS Hosting Instructions: 
+## [macOS Hosting Instructions](https://github.com/jkcoxson/JitStreamer/wiki/Building-and-self-hosting-on-macOS)
 
 # Usage
 - Run JitStreamer and it will create an initial config file. Edit it with a text editor.
