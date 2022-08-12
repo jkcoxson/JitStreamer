@@ -229,7 +229,7 @@ impl Backend {
         res
     }
 
-    pub fn prefered_app(name: &str) -> bool {
+    pub fn preferred_app(name: &str) -> bool {
         let app_list = include_str!("known_apps.txt").to_string();
         let apps: Vec<&str> = app_list.split('\n').collect();
         for app in apps {

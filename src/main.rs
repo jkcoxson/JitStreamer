@@ -500,7 +500,7 @@ async fn list_apps(
     };
 
     // Trim the list of apps
-    let mut prefered_apps = Value::Object(serde_json::Map::new());
+    let mut preferred_apps = Value::Object(serde_json::Map::new());
     let mut apps: Value = Value::Object(serde_json::Map::new());
     let mut count = 0;
     for i in v {
@@ -520,8 +520,8 @@ async fn list_apps(
         if bundle_id.contains("com.apple") {
             continue;
         }
-        if backend::Backend::prefered_app(&name) {
-            prefered_apps[&name] = serde_json::Value::String(bundle_id);
+        if backend::Backend::preferred_app(&name) {
+            preferred_apps[&name] = serde_json::Value::String(bundle_id);
         } else {
             apps[&name] = serde_json::Value::String(bundle_id);
         }
@@ -531,7 +531,7 @@ async fn list_apps(
     let mut lock = backend.lock().await;
     lock.counter.fetched += count;
 
-    let res = packets::list_apps_response(true, "", apps, prefered_apps);
+    let res = packets::list_apps_response(true, "", apps, preferred_apps);
     Ok(res)
 }
 
