@@ -233,6 +233,9 @@ impl Backend {
         let app_list = include_str!("known_apps.txt").to_string();
         let apps: Vec<&str> = app_list.split('\n').collect();
         for app in apps {
+            if app.len() < 3 {
+                continue;
+            }
             if name.contains(app) {
                 return true;
             }
