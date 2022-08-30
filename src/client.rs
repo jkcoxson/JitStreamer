@@ -184,11 +184,9 @@ impl Client {
 
             let path = match self.get_dmg_path() {
                 Ok(p) => p,
-                Err(_) => {
+                Err(e) => {
                     (*self.heart.lock().unwrap()).kill(device.get_udid());
-                    return Err(
-                        "Unable to get dmg path, the server was set up incorrectly!".to_string()
-                    );
+                    return Err(e);
                 }
             };
 
@@ -449,7 +447,10 @@ impl Client {
         }
 
         if ios_dmg_url == None {
-            return Err("Libraries did not contain iOS DMG".to_string());
+            return Err(format!(
+                "Libraries did not contain a DMG for iOS {}",
+                ios_version
+            ));
         }
 
         // Download DMG zip
