@@ -17,8 +17,10 @@ Error:"#;
 
 pub const MOUNTING: &str = r#"JitStreamer is currently mounting the developer disk image.
 This can take up to 5 minutes, keep your device powered on and connected.
+Run the shortcut again to check the mounting progress in a bit.
 If you receive this message multiple times, please restart your device."#;
 
 pub const DETACH: &str = r#"Unable to send the detach command to the device.
 This error can be ignored if the app still launched successfully.
+(Please note that all apps installed with TrollStore are INCOMPATIBLE with JitStreamer. Please contact your app's developer to add support for ptrace instead.)
 Otherwise, please restart your device."#;
