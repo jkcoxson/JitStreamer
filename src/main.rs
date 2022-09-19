@@ -37,6 +37,13 @@ async fn main() {
     env_logger::init();
     println!("Logger initialized");
 
+    // Test to make sure that usbmuxd is running
+    if rusty_libimobiledevice::idevice::get_devices().is_err() {
+        // usbmuxd is not running
+        log::error!("There is no muxer running! Start one like usbmuxd or netmuxd.");
+        std::process::exit(1);
+    }
+
     let config = config::Config::load();
     let static_dir = config.paths.static_path.clone();
     let current_dir = std::env::current_dir().expect("failed to read current directory");
