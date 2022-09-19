@@ -6,7 +6,7 @@ const VERSION: &str = "0.1.2";
 
 fn main() {
     // Collect arguments
-    let mut target = "http://jitstreamer.com".to_string();
+    let mut target = "https://jitstreamer.com".to_string();
     let mut args: Vec<String> = std::env::args().collect();
 
     // Correct for Windows
@@ -23,7 +23,7 @@ fn main() {
             target = args[i + 1].clone();
         }
         if args[i] == "-h" || args[i] == "--help" {
-            println!("Usage: {} [--target <IP>]", args[0]);
+            println!("Usage: {} [--target <HTTP address>]", args[0]);
             return;
         }
         if args[i] == "-a" || args[i] == "--about" {
@@ -35,6 +35,9 @@ fn main() {
         }
         i += 1;
     }
+    // Print what the target address is
+    println!("Pairing with {target}, specify a different target if necessary. Pass -h for more info.");
+    
     // Wait until a device is connected by USB
     let mut device = None;
     loop {
