@@ -421,7 +421,7 @@ impl Client {
         let dmg_libraries =
             ["https://raw.githubusercontent.com/jkcoxson/JitStreamer/master/versions.json"];
         for lib in dmg_libraries {
-            if ios_dmg_url != None {
+            if ios_dmg_url.is_some() {
                 break;
             }
             // Download versions.json from GitHub
@@ -446,7 +446,7 @@ impl Client {
                 .map(|x| x.as_str().unwrap().to_string());
         }
 
-        if ios_dmg_url == None {
+        if ios_dmg_url.is_none() {
             return Err(format!(
                 "Libraries did not contain a DMG for iOS {}",
                 ios_version
