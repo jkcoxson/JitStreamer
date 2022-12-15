@@ -5,8 +5,6 @@ This program runs on a Linux server and requires the following:
 - [rusty_libimobiledevice](https://github.com/jkcoxson/rusty_libimobiledevice)
 - A working Rust and C dev environment
 
-Example of jitstreamer working: https://imgur.com/rr9xJhX
-
 You do not need to build this software yourself, there is a public instance. 
 You can find support at the [JitStreamer Discord server](https://discord.gg/RgpFBX3Q3k)
 
