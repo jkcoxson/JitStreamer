@@ -8,15 +8,15 @@ edition = "2021"
 default-run = "jit_streamer"
 
 [dependencies]
-tokio = { version = "*", features = [ "full" ] }
+tokio = { version = "*", features = ["full"] }
 futures = { version = "*" }
 
-warp = { version = "*", features = [ "tls" ] }
+warp = { version = "*", features = ["tls"] }
 bytes = { version = "*" }
-reqwest = { version = "*", features = [ "blocking" ] }
+reqwest = { version = "*", features = ["blocking"] }
 ip-in-subnet = { version = "*" }
 
-serde = { version = "*", features = [ "derive" ] }
+serde = { version = "*", features = ["derive"] }
 serde_json = { version = "*" }
 toml = { version = "*" }
 
@@ -27,8 +27,11 @@ zip = { version = "*" }
 log = { version = "*" }
 env_logger = { version = "*" }
 
-rusty_libimobiledevice = { version = "*", features = [ "static", "vendored" ] }
-plist_plus = { version = "*", features = [ "static", "vendored" ] }
+rusty_libimobiledevice = { version = "0.1.8", features = [
+  "static",
+  "vendored",
+] }
+plist_plus = { version = "*", features = ["static", "vendored"] }
 
 [[bin]]
 name = "pair"
