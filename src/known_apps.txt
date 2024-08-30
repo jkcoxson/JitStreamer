@@ -8,3 +8,8 @@ PPSSPP
 Flycast
 Provenance
 PojavLauncher
+Folium
+Sudachi
+Ignited
+Limon
+Limón
