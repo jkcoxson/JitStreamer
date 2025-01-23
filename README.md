@@ -1,6 +1,10 @@
 # JitStreamer
 A program to activate JIT across the far reaches of the internet
 
+## UPDATE
+As of iOS 17.0, this program no longer works. I have written a [replacement server software](https://github.com/jkcoxson/JitStreamer-EB) to replace this.
+As such, this repository is now archived. If you are below 17.0, feel free to use this. Otherwise, please migrate.
+
 This program runs on a Linux server and requires the following:
 - [rusty_libimobiledevice](https://github.com/jkcoxson/rusty_libimobiledevice)
 - A working Rust and C dev environment
